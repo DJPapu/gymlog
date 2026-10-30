@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(uv --version)",
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell(python --version)",
+      "PowerShell(pip --version)",
+      "PowerShell(powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\")",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; uv --version)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\"; uv init backend --no-workspace)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv add fastapi \"uvicorn[standard]\" sqlalchemy alembic pydantic-settings psycopg python-jose[cryptography] httpx)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv add --dev ruff mypy pytest pytest-asyncio)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv add --dev ruff mypy pytest pytest-asyncio)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName)",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\catalog\\\\photos\\\\inbox\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\catalog\\\\photos\\\\processed\")",
+      "PowerShell(New-Item -ItemType File -Force \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\catalog\\\\photos\\\\inbox\\\\.gitkeep\")",
+      "PowerShell(New-Item -ItemType File -Force \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\catalog\\\\photos\\\\processed\\\\.gitkeep\")",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv run python -c \"from app.main import app; print\\('FastAPI app imported OK'\\)\")",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv run uvicorn app.main:app --port 8000 --timeout-graceful-shutdown 1 2>&1 | Select-Object -First 10)",
+      "PowerShell(Stop-Process -Name \"python\" -Force -ErrorAction SilentlyContinue)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv run alembic init alembic 2>&1)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv run pytest tests/ -v 2>&1)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv run python -m pytest tests/ -v 2>&1)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv run python -m pytest tests/test_auth.py::test_health_no_auth -v --tb=short 2>&1)",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\I866844\\\\.local\\\\bin;$env:Path\"; $env:PYTHONUTF8 = \"1\"; Set-Location \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\backend\"; uv run python -m pytest tests/ -v --tb=short 2>&1)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\catalog\" -Recurse | Where-Object { $_.Extension -match \"\\\\.\\(jpg|jpeg|png|heic|webp\\)$\" } | Select-Object FullName, Length)",
+      "Bash(findstr \"recharts\")",
+      "PowerShell(cd \"C:\\\\Users\\\\I866844\\\\Documents\\\\ProyectoAtlas\\\\frontend\"; & \"$env:USERPROFILE\\\\.local\\\\bin\\\\uv.exe\" run --project ../backend python --version 2>&1; npm run build 2>&1 | Select-Object -Last 20)",
+      "PowerShell(New-NetFirewallRule -DisplayName \"Vite Dev Server \\(5173\\)\" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private,Domain 2>&1)"
+    ]
+  }
+}

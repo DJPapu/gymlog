@@ -1,0 +1,30 @@
+import { NavLink } from 'react-router-dom'
+
+const tabs = [
+  { to: '/', label: 'Hoy', icon: '🏋️' },
+  { to: '/rutinas', label: 'Rutinas', icon: '📋' },
+  { to: '/ejercicios', label: 'Ejercicios', icon: '💪' },
+  { to: '/progreso', label: 'Progreso', icon: '📈' },
+]
+
+export default function BottomNav() {
+  return (
+    <nav className="border-t border-gray-800 bg-gray-950 flex pb-safe">
+      {tabs.map((tab) => (
+        <NavLink
+          key={tab.to}
+          to={tab.to}
+          end={tab.to === '/'}
+          className={({ isActive }) =>
+            `flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-colors min-h-[56px] ${
+              isActive ? 'text-indigo-400' : 'text-gray-500 hover:text-gray-300'
+            }`
+          }
+        >
+          <span className="text-xl leading-none">{tab.icon}</span>
+          <span>{tab.label}</span>
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
