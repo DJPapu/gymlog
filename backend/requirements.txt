@@ -47,6 +47,8 @@ opentelemetry-api==1.45.2
     # via fastapi
 psycopg==3.3.6
     # via gymlog-backend (pyproject.toml)
+psycopg-binary==3.3.6
+    # via psycopg
 pyasn1==0.6.5
     # via
     #   python-jose
