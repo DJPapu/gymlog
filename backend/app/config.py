@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str = ""
     supabase_url: str = ""
-cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173"
 
     @property
     def cors_origins_list(self) -> list[str]:
