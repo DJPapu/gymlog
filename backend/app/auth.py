@@ -1,5 +1,7 @@
+import threading
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -11,13 +13,30 @@ _bearer = HTTPBearer()
 _DEV_TOKEN = "dev-local-user"
 _DEV_USER_ID = "local-user-dev"
 
+_jwks_cache: dict | None = None
+_jwks_lock = threading.Lock()
+
+
+def _get_jwks() -> dict:
+    global _jwks_cache
+    if _jwks_cache is not None:
+        return _jwks_cache
+    with _jwks_lock:
+        if _jwks_cache is not None:
+            return _jwks_cache
+        url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+        resp = httpx.get(url, timeout=10)
+        resp.raise_for_status()
+        _jwks_cache = resp.json()
+    return _jwks_cache
+
 
 def verify_jwt(credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)]) -> str:
-    """Validates Supabase JWT and returns the user_id (sub claim).
-    En desarrollo (sin SUPABASE_JWT_SECRET), acepta el token 'dev-local-user'."""
+    """Validates Supabase JWT via JWKS and returns the user_id (sub claim).
+    En desarrollo (sin SUPABASE_URL), acepta el token 'dev-local-user'."""
     token = credentials.credentials
 
-    if not settings.supabase_jwt_secret:
+    if not settings.supabase_url:
         if token == _DEV_TOKEN:
             return _DEV_USER_ID
         raise HTTPException(
@@ -27,10 +46,11 @@ def verify_jwt(credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bea
         )
 
     try:
+        jwks = _get_jwks()
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            jwks,
+            algorithms=["ES256", "HS256"],
             options={"verify_aud": False},
         )
     except JWTError as exc:
