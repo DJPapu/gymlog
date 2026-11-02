@@ -6,15 +6,17 @@ const _envUrl = import.meta.env.VITE_API_URL as string | undefined
 const _isDev = import.meta.env.VITE_SUPABASE_URL?.includes('placeholder')
 const API_URL = _envUrl || (_isDev ? `http://${window.location.hostname}:8000` : 'https://gymlog-5y6y.onrender.com')
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
+async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
-  // Sin sesión Supabase real → token de desarrollo
   const token = data.session?.access_token ?? 'dev-local-user'
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
+  if (method !== 'GET') headers['Content-Type'] = 'application/json'
+  return headers
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = await getAuthHeaders()
+  const method = (init.method ?? 'GET').toUpperCase()
+  const headers = await getAuthHeaders(method)
   const url = `${API_URL}${path}`
   let res: Response
   try {
