@@ -8,6 +8,7 @@ export type SyncState = 'idle' | 'syncing' | 'error' | 'offline'
 export function useSyncStatus() {
   const pendingCount = useLiveQuery(() => db.outbox.count(), []) ?? 0
   const [state, setState] = useState<SyncState>(navigator.onLine ? 'idle' : 'offline')
+  const [lastError, setLastError] = useState<string | null>(null)
 
   const doSync = useCallback(async () => {
     if (!navigator.onLine) {
@@ -15,11 +16,14 @@ export function useSyncStatus() {
       return
     }
     setState('syncing')
+    setLastError(null)
     try {
       await sync()
       setState('idle')
     } catch (err) {
-      console.warn('[sync] fallo:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      console.warn('[sync] fallo:', msg)
+      setLastError(msg)
       setState('error')
     }
   }, [])
@@ -42,5 +46,5 @@ export function useSyncStatus() {
     }
   }, [doSync])
 
-  return { state, pendingCount, doSync }
+  return { state, pendingCount, doSync, lastError }
 }

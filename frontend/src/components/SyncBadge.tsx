@@ -4,9 +4,10 @@ interface Props {
   state: SyncState
   pendingCount: number
   onSync: () => void
+  lastError?: string | null
 }
 
-export default function SyncBadge({ state, pendingCount, onSync }: Props) {
+export default function SyncBadge({ state, pendingCount, onSync, lastError }: Props) {
   if (state === 'syncing') {
     return <span className="text-indigo-400 text-xs animate-pulse">Sincronizando…</span>
   }
@@ -15,8 +16,9 @@ export default function SyncBadge({ state, pendingCount, onSync }: Props) {
   }
   if (state === 'error') {
     return (
-      <button onClick={onSync} className="text-red-400 text-xs underline-offset-2 underline">
-        Error al sync
+      <button onClick={onSync} className="text-red-400 text-xs text-right max-w-[200px] leading-tight">
+        <span className="underline">Error al sync</span>
+        {lastError && <span className="block text-red-500 text-[10px] opacity-75 truncate">{lastError}</span>}
       </button>
     )
   }

@@ -18,13 +18,13 @@ const AUTH_REQUIRED = !import.meta.env.VITE_SUPABASE_URL?.includes('placeholder'
 function AppShell() {
   const location = useLocation()
   const inSession = location.pathname.startsWith('/sesion/')
-  const { state, pendingCount, doSync } = useSyncStatus()
+  const { state, pendingCount, doSync, lastError } = useSyncStatus()
 
   return (
     <div className="flex flex-col h-screen max-w-lg mx-auto">
       {!inSession && (
         <div className="flex justify-end px-4 pt-2 pb-0">
-          <SyncBadge state={state} pendingCount={pendingCount} onSync={doSync} />
+          <SyncBadge state={state} pendingCount={pendingCount} onSync={doSync} lastError={lastError} />
         </div>
       )}
       <div className="flex-1 overflow-hidden flex flex-col">
