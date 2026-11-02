@@ -1,9 +1,10 @@
 import { supabase } from './supabase'
 
-// En móvil, window.location.hostname es la IP del PC (no localhost),
-// así que la usamos para construir la URL del backend dinámicamente.
 const _envUrl = import.meta.env.VITE_API_URL as string | undefined
-const API_URL = _envUrl || `http://${window.location.hostname}:8000`
+// Dev local: sin env var, construye la URL con la IP del PC (para iPhone en misma red)
+// Producción: usa VITE_API_URL; si falta, cae al backend de Render como seguro HTTPS
+const _isDev = import.meta.env.VITE_SUPABASE_URL?.includes('placeholder')
+const API_URL = _envUrl || (_isDev ? `http://${window.location.hostname}:8000` : 'https://gymlog-5y6y.onrender.com')
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
