@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db, type Exercise, type SessionExercise, type SetRecord } from '../db/schema'
 import { getLastSession, type LastSessionSummary } from '../lib/lastSession'
@@ -80,7 +80,7 @@ export default function Sesion() {
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 pb-6">
         {sessionExercises === undefined && <p className="text-gray-500 text-sm">Cargando...</p>}
         {sessionExercises?.map((se: SessionExercise) => (
-          <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} />
+          <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} routineDayId={session.routine_day_id ?? null} />
         ))}
       </div>
     </div>
@@ -89,7 +89,7 @@ export default function Sesion() {
 
 // ── Tarjeta de ejercicio ────────────────────────────────────────────────────
 
-function ExerciseCard({ sessionExercise: se, sessionId }: { sessionExercise: SessionExercise; sessionId: string }) {
+function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessionExercise: SessionExercise; sessionId: string; routineDayId: string | null }) {
   const sets = useLiveQuery(
     () =>
       db.sets
@@ -98,9 +98,20 @@ function ExerciseCard({ sessionExercise: se, sessionId }: { sessionExercise: Ses
     [se.id],
   )
   const exercise = useLiveQuery(() => db.exercises.get(se.exercise_id), [se.exercise_id])
+  const rde = useLiveQuery(
+    () =>
+      routineDayId
+        ? db.routine_day_exercises
+            .filter((r) => r.routine_day_id === routineDayId && r.exercise_id === se.exercise_id && !r.deleted_at)
+            .first()
+        : undefined,
+    [routineDayId, se.exercise_id],
+  )
   const [lastSummary, setLastSummary] = useState<LastSessionSummary | null>(null)
   const [showNote, setShowNote] = useState(false)
   const [note, setNote] = useState(se.notes ?? '')
+  const [updatePrompt, setUpdatePrompt] = useState<{ direction: 'up' | 'down'; suggestedWeight: number; currentTarget: number } | null>(null)
+  const promptedRef = useRef(false)
 
   useEffect(() => {
     getLastSession(se.exercise_id, sessionId).then(setLastSummary)
@@ -109,10 +120,36 @@ function ExerciseCard({ sessionExercise: se, sessionId }: { sessionExercise: Ses
   const completedCount = sets?.filter((s) => s.completed).length ?? 0
   const totalCount = sets?.length ?? 0
 
+  useEffect(() => {
+    if (!rde?.target_weight_kg || !sets || !exercise) return
+    if (completedCount === 0 || completedCount !== totalCount) return
+    if (promptedRef.current) return
+    const doneSets = sets.filter((s) => s.completed && !s.is_warmup && s.weight_kg != null)
+    if (doneSets.length === 0) return
+    const maxWeight = Math.max(...doneSets.map((s) => s.weight_kg!))
+    const target = rde.target_weight_kg
+    const inc = exercise.weight_increment_kg ?? 2.5
+    if (maxWeight >= target + inc * 0.5) {
+      promptedRef.current = true
+      setUpdatePrompt({ direction: 'up', suggestedWeight: maxWeight, currentTarget: target })
+    } else if (maxWeight <= target - inc * 0.5) {
+      promptedRef.current = true
+      setUpdatePrompt({ direction: 'down', suggestedWeight: maxWeight, currentTarget: target })
+    }
+  }, [completedCount, totalCount, rde, sets, exercise])
+
   async function saveNote() {
     const now = new Date().toISOString()
     await db.session_exercises.update(se.id, { notes: note || null, updated_at: now })
     setShowNote(false)
+  }
+
+  async function updateTarget(newWeight: number) {
+    if (!rde) return
+    const now = new Date().toISOString()
+    await db.routine_day_exercises.update(rde.id, { target_weight_kg: newWeight, updated_at: now })
+    await db.outbox.add({ table: 'routine_day_exercises', record_id: rde.id, op: 'upsert', payload: { ...rde, target_weight_kg: newWeight, updated_at: now }, ts: now })
+    setUpdatePrompt(null)
   }
 
   async function deleteExercise() {
@@ -135,6 +172,12 @@ function ExerciseCard({ sessionExercise: se, sessionId }: { sessionExercise: Ses
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <h3 className="text-white font-bold text-base leading-tight">{exercise.name}</h3>
+            {rde && (
+              <p className="text-emerald-500 text-xs mt-0.5">
+                Objetivo: {rde.target_sets}×{rde.rep_min}–{rde.rep_max} reps
+                {rde.target_weight_kg != null && ` · ${rde.target_weight_kg} kg`}
+              </p>
+            )}
             {lastSummary && (
               <p className="text-indigo-400 text-xs mt-0.5">
                 Última vez: {lastSummary.display}
@@ -193,6 +236,33 @@ function ExerciseCard({ sessionExercise: se, sessionId }: { sessionExercise: Ses
         </button>
         <DeleteButton onConfirm={deleteExercise} size="sm" />
       </div>
+
+      {/* Sugerencia de actualizar objetivo */}
+      {updatePrompt && (
+        <div className="px-4 pb-4 pt-3 border-t border-indigo-800/40 bg-indigo-950/30">
+          <p className="text-indigo-200 text-xs mb-3 leading-relaxed">
+            {updatePrompt.direction === 'up'
+              ? `Superaste el objetivo (${updatePrompt.currentTarget} kg → máx ${updatePrompt.suggestedWeight} kg). ¿Subir el objetivo?`
+              : `Quedaste por debajo del objetivo (${updatePrompt.currentTarget} kg → máx ${updatePrompt.suggestedWeight} kg). ¿Bajar el objetivo?`}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => updateTarget(updatePrompt.suggestedWeight)}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 rounded-xl min-h-[44px]"
+            >
+              {updatePrompt.direction === 'up'
+                ? `↑ Subir a ${updatePrompt.suggestedWeight} kg`
+                : `↓ Bajar a ${updatePrompt.suggestedWeight} kg`}
+            </button>
+            <button
+              onClick={() => setUpdatePrompt(null)}
+              className="px-5 text-gray-400 text-xs min-h-[44px]"
+            >
+              Mantener
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

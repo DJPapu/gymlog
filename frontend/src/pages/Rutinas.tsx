@@ -235,6 +235,11 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
   const [repMax, setRepMax] = useState(12)
   const [targetWeight, setTargetWeight] = useState('')
   const [saving, setSaving] = useState(false)
+  const [editingRDE, setEditingRDE] = useState<string | null>(null)
+  const [editSets, setEditSets] = useState(3)
+  const [editRepMin, setEditRepMin] = useState(8)
+  const [editRepMax, setEditRepMax] = useState(12)
+  const [editTargetWeight, setEditTargetWeight] = useState('')
 
   const exMap: Record<string, Exercise> = exercises ? Object.fromEntries(exercises.map((e: Exercise) => [e.id, e])) : {}
 
@@ -276,6 +281,23 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
     await db.outbox.add({ table: 'routine_day_exercises', record_id: id, op: 'delete', payload: { deleted_at: now }, ts: now })
   }
 
+  function startEdit(rde: RoutineDayExercise) {
+    setEditingRDE(rde.id)
+    setEditSets(rde.target_sets)
+    setEditRepMin(rde.rep_min)
+    setEditRepMax(rde.rep_max)
+    setEditTargetWeight(rde.target_weight_kg != null ? String(rde.target_weight_kg) : '')
+  }
+
+  async function saveEditRDE(rde: RoutineDayExercise) {
+    const now = new Date().toISOString()
+    const target_weight_kg = editTargetWeight ? parseFloat(editTargetWeight) : null
+    const updated = { ...rde, target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now }
+    await db.routine_day_exercises.update(rde.id, { target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now })
+    await db.outbox.add({ table: 'routine_day_exercises', record_id: rde.id, op: 'upsert', payload: updated, ts: now })
+    setEditingRDE(null)
+  }
+
   return (
     <div className="bg-gray-750 rounded-lg">
       <div className="flex items-center gap-1">
@@ -290,18 +312,59 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
         <div className="px-3 pb-3 space-y-1.5">
           {rdes?.map((rde: RoutineDayExercise) => {
             const ex = exMap[rde.exercise_id]
-            return ex ? (
-              <div key={rde.id} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-2">
+            if (!ex) return null
+            if (editingRDE === rde.id) {
+              return (
+                <div key={rde.id} className="bg-gray-800 rounded-lg px-3 py-2.5">
+                  <p className="text-white text-xs font-semibold mb-2">{ex.name}</p>
+                  <div className="flex gap-2 flex-wrap items-center mb-2.5">
+                    <div className="flex gap-1 items-center">
+                      <input type="number" inputMode="numeric" value={editSets} onChange={(e) => setEditSets(+e.target.value)} min={1} max={10}
+                        className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
+                      <span className="text-gray-500 text-xs">ser</span>
+                    </div>
+                    <div className="flex gap-1 items-center">
+                      <input type="number" inputMode="numeric" value={editRepMin} onChange={(e) => setEditRepMin(+e.target.value)} min={1}
+                        className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
+                      <span className="text-gray-500 text-xs">–</span>
+                      <input type="number" inputMode="numeric" value={editRepMax} onChange={(e) => setEditRepMax(+e.target.value)} min={1}
+                        className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
+                      <span className="text-gray-500 text-xs">rep</span>
+                    </div>
+                    <div className="flex gap-1 items-center">
+                      <input type="number" inputMode="decimal" value={editTargetWeight} onChange={(e) => setEditTargetWeight(e.target.value)}
+                        min={0} step={ex.weight_increment_kg ?? 2.5} placeholder="—"
+                        className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
+                      <span className="text-gray-500 text-xs">kg</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setEditingRDE(null)} className="text-gray-400 text-xs px-3 py-1.5 min-h-[36px]">Cancelar</button>
+                    <button type="button" onClick={() => saveEditRDE(rde)} className="bg-indigo-600 text-white text-xs px-4 py-1.5 rounded-lg min-h-[36px]">Guardar</button>
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <div key={rde.id} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-1.5">
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-xs font-medium">{ex.name}</p>
                   <p className="text-gray-400 text-xs">
                     {rde.target_sets} series · {rde.rep_min}–{rde.rep_max} reps
-                    {rde.target_weight_kg != null && <span className="ml-1">· {rde.target_weight_kg} kg</span>}
+                    {rde.target_weight_kg != null && <span className="ml-1 text-emerald-500">· {rde.target_weight_kg} kg</span>}
                   </p>
                 </div>
+                <button
+                  onClick={() => startEdit(rde)}
+                  className="text-gray-500 hover:text-indigo-400 transition-colors flex items-center justify-center min-h-[36px] min-w-[36px] shrink-0"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                  </svg>
+                </button>
                 <DeleteButton onConfirm={() => deleteRDE(rde.id)} size="sm" />
               </div>
-            ) : null
+            )
           })}
 
           {showAdd ? (
