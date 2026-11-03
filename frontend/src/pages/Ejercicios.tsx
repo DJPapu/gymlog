@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { db, type Exercise, type Routine, type RoutineDay } from '../db/schema'
 import { apiFetch } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { groupByMuscle } from '../lib/muscleGroups'
 
 const EQUIPMENT_OPTIONS = ['machine', 'cable', 'barbell', 'dumbbell', 'bodyweight', 'smith', 'plate_loaded']
 const MOVEMENT_OPTIONS = ['push', 'pull', 'squat', 'hinge', 'lunge', 'carry', 'isolation', 'core']
@@ -406,14 +407,4 @@ const inputCls = 'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
 const btnPrimary = 'bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors min-h-[44px] text-sm'
 const btnSecondary = 'bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-colors min-h-[44px] text-sm'
 
-function groupByMuscle(exercises: Exercise[]) {
-  const map = new Map<string, Exercise[]>()
-  for (const ex of exercises) {
-    const m = ex.primary_muscle
-    if (!map.has(m)) map.set(m, [])
-    map.get(m)!.push(ex)
-  }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b, 'es'))
-    .map(([muscle, items]) => ({ muscle, items }))
-}
+

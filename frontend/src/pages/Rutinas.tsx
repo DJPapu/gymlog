@@ -4,6 +4,7 @@ import { db, type Exercise, type Routine, type RoutineDay, type RoutineDayExerci
 import { useAuth } from '../lib/auth'
 import { apiFetch } from '../lib/api'
 import { DeleteButton } from '../components/DeleteButton'
+import { groupByMuscle } from '../lib/muscleGroups'
 
 export default function Rutinas() {
   const { user } = useAuth()
@@ -378,17 +379,7 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
 
 // ── Picker de ejercicio con thumbnails, lightbox y agrupación por músculo ───
 
-function groupByMuscle(exercises: Exercise[]) {
-  const map = new Map<string, Exercise[]>()
-  for (const ex of exercises) {
-    const m = ex.primary_muscle
-    if (!map.has(m)) map.set(m, [])
-    map.get(m)!.push(ex)
-  }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b, 'es'))
-    .map(([muscle, items]) => ({ muscle, items }))
-}
+
 
 function ExercisePicker({ exercises, onPick }: { exercises: Exercise[]; onPick: (ex: Exercise) => void }) {
   const [search, setSearch] = useState('')
