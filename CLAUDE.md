@@ -194,6 +194,17 @@ Cada fase termina con: tests pasando, app ejecutable en local y actualización d
 - Claude Code sigue el procedimiento de §10 y luego ejecuta `python -m app.scripts.import_catalog`.
 - Para máquinas nuevas más adelante: mismo flujo, o alta manual en la pantalla Ejercicios.
 
+**Fase 9 — Panel de administración (escritorio)**
+- Ruta `/admin` en el mismo frontend React, protegida por email de admin (variable de entorno `VITE_ADMIN_EMAIL`).
+- UI optimizada para pantalla ancha: tablas en lugar de tarjetas móviles.
+- Secciones:
+  - **Catálogo**: tabla de ejercicios con edición inline de todos los campos + botón importar desde `exercises.json`.
+  - **Estadísticas globales**: volumen total por usuario y por semana, e1RM por ejercicio, sesiones en los últimos 30 días.
+  - **Usuarios**: lista de perfiles registrados, fecha de última sesión.
+- Nuevos endpoints FastAPI necesarios: `GET /admin/stats` (requiere `admin_user_id` en config), `GET /admin/users`.
+- No requiere despliegue separado: se sirve desde Cloudflare Pages en la misma URL.
+- ✅ Hecho cuando: Valentin puede editar el catálogo y ver estadísticas desde el navegador del PC.
+
 ---
 
 ## 9. Limitaciones conocidas del hosting gratuito
@@ -288,9 +299,12 @@ VITE_API_URL=http://localhost:8000
 
 ## Estado actual
 
-- Fase: **8 — completa** (catálogo desde fotos, intercalado antes de Fase 4)
-- Último cambio: 14 ejercicios desde fotos + seed automático en Dexie + `start_date`/`duration_weeks` en rutinas + banner de aviso en Hoy (2026-10-30).
-- Siguiente paso: Fase 4 (sincronización: outbox → /sync/push + /sync/pull).
+- Fase: **7 completa + 8 completa + mejoras post-deploy**
+- Último cambio (2026-11-03):
+  - Catálogo ampliado a **26 ejercicios** (12 nuevos desde fotos: curl femoral sentado, hack squat, mancuernas, sentadilla con barra, press inclinado, bench press, press cables, crunch abdominal, extensión lumbares, remo sentado Cybex Eagle, fondos asistidos, dominadas asistidas).
+  - Eliminación en toda la app: rutinas (con cascade a días/ejercicios), días, ejercicios de día, ejercicios de sesión activa, sesiones completas desde Progreso — todo con soft-delete + outbox.
+  - Fase 9 (Admin) definida en el roadmap.
+- Siguiente paso: **Fase 4** (sincronización automática: pull periódico, reintentos con backoff) o **Fase 5** (gráficos de progreso con Recharts) o **Fase 9** (panel admin escritorio).
 
 ### Notas de la Fase 0
 - En Windows, uvicorn y pytest deben lanzarse como módulo Python: `uv run python -m uvicorn ...` / `uv run python -m pytest`

@@ -14,6 +14,10 @@ async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
   return headers
 }
 
+export async function wakeUpBackend(): Promise<void> {
+  try { await fetch(`${API_URL}/health`) } catch { /* ignore — solo para despertar Render */ }
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = await getAuthHeaders(method)

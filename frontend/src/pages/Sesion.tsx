@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db, type Exercise, type SessionExercise, type SetRecord } from '../db/schema'
 import { getLastSession, type LastSessionSummary } from '../lib/lastSession'
+import { DeleteButton } from '../components/DeleteButton'
 
 export default function Sesion() {
   const { id: sessionId } = useParams<{ id: string }>()
@@ -114,6 +115,17 @@ function ExerciseCard({ sessionExercise: se, sessionId }: { sessionExercise: Ses
     setShowNote(false)
   }
 
+  async function deleteExercise() {
+    const now = new Date().toISOString()
+    const allSets = await db.sets.filter((s) => s.session_exercise_id === se.id).toArray()
+    for (const s of allSets) {
+      await db.sets.update(s.id, { deleted_at: now, updated_at: now })
+      await db.outbox.add({ table: 'sets', record_id: s.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+    }
+    await db.session_exercises.update(se.id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+  }
+
   if (!exercise) return null
 
   return (
@@ -171,14 +183,15 @@ function ExerciseCard({ sessionExercise: se, sessionId }: { sessionExercise: Ses
         ))}
       </div>
 
-      {/* Botón añadir serie */}
-      <div className="px-4 py-3">
+      {/* Botón añadir serie + eliminar ejercicio */}
+      <div className="px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => addSet(se.id)}
           className="text-indigo-400 text-sm hover:text-indigo-300"
         >
           + Añadir serie
         </button>
+        <DeleteButton onConfirm={deleteExercise} size="sm" />
       </div>
     </div>
   )

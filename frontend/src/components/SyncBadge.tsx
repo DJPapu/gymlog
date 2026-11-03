@@ -11,6 +11,9 @@ export default function SyncBadge({ state, pendingCount, onSync, lastError }: Pr
   if (state === 'syncing') {
     return <span className="text-indigo-400 text-xs animate-pulse">Sincronizando…</span>
   }
+  if (state === 'warming') {
+    return <span className="text-amber-500 text-xs animate-pulse">Despertando servidor…</span>
+  }
   if (state === 'offline') {
     return <span className="text-gray-500 text-xs">Sin conexión</span>
   }

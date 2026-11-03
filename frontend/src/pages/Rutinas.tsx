@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { db, type Exercise, type Routine, type RoutineDay, type RoutineDayExercise } from '../db/schema'
 import { useAuth } from '../lib/auth'
 import { apiFetch } from '../lib/api'
+import { DeleteButton } from '../components/DeleteButton'
 
 export default function Rutinas() {
   const { user } = useAuth()
@@ -42,6 +43,23 @@ export default function Rutinas() {
     setSaving(false)
   }
 
+  async function deleteRoutine(id: string) {
+    const now = new Date().toISOString()
+    if (selected === id) setSelected(null)
+    const days = await db.routine_days.filter((d) => d.routine_id === id).toArray()
+    for (const day of days) {
+      const rdes = await db.routine_day_exercises.filter((r) => r.routine_day_id === day.id).toArray()
+      for (const rde of rdes) {
+        await db.routine_day_exercises.update(rde.id, { deleted_at: now, updated_at: now })
+        await db.outbox.add({ table: 'routine_day_exercises', record_id: rde.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+      }
+      await db.routine_days.update(day.id, { deleted_at: now, updated_at: now })
+      await db.outbox.add({ table: 'routine_days', record_id: day.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+    }
+    await db.routines.update(id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({ table: 'routines', record_id: id, op: 'delete', payload: { deleted_at: now }, ts: now })
+  }
+
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-4 pt-4 pb-3">
@@ -60,15 +78,18 @@ export default function Rutinas() {
         )}
         {routines?.map((r: Routine) => (
           <div key={r.id}>
-            <button
-              onClick={() => setSelected(selected === r.id ? null : r.id)}
-              className="w-full bg-gray-800 rounded-xl px-4 py-3 text-left"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-white font-medium">{r.name}</span>
-                <span className="text-gray-500 text-sm">{selected === r.id ? '▲' : '▼'}</span>
-              </div>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setSelected(selected === r.id ? null : r.id)}
+                className="flex-1 bg-gray-800 rounded-xl px-4 py-3 text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-white font-medium">{r.name}</span>
+                  <span className="text-gray-500 text-sm">{selected === r.id ? '▲' : '▼'}</span>
+                </div>
+              </button>
+              <DeleteButton onConfirm={() => deleteRoutine(r.id)} />
+            </div>
             {selected === r.id && <RoutineDetail routineId={r.id} />}
           </div>
         ))}
@@ -154,9 +175,22 @@ function RoutineDetail({ routineId }: { routineId: string }) {
     setSaving(false)
   }
 
+  async function deleteDay(id: string) {
+    const now = new Date().toISOString()
+    const rdes = await db.routine_day_exercises.filter((r) => r.routine_day_id === id).toArray()
+    for (const rde of rdes) {
+      await db.routine_day_exercises.update(rde.id, { deleted_at: now, updated_at: now })
+      await db.outbox.add({ table: 'routine_day_exercises', record_id: rde.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+    }
+    await db.routine_days.update(id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({ table: 'routine_days', record_id: id, op: 'delete', payload: { deleted_at: now }, ts: now })
+  }
+
   return (
     <div className="ml-4 mt-1 space-y-1">
-      {days?.map((day: RoutineDay) => <DayDetail key={day.id} day={day} routineId={routineId} />)}
+      {days?.map((day: RoutineDay) => (
+        <DayDetail key={day.id} day={day} routineId={routineId} onDelete={() => deleteDay(day.id)} />
+      ))}
 
       {showNewDay ? (
         <form onSubmit={createDay} className="flex gap-2 mt-2">
@@ -185,7 +219,7 @@ function RoutineDetail({ routineId }: { routineId: string }) {
   )
 }
 
-function DayDetail({ day, routineId }: { day: RoutineDay; routineId: string }) {
+function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: string; onDelete: () => void }) {
   const [open, setOpen] = useState(false)
   const rdes = useLiveQuery(
     () => db.routine_day_exercises.filter((r) => r.routine_day_id === day.id && !r.deleted_at).sortBy('position'),
@@ -235,24 +269,36 @@ function DayDetail({ day, routineId }: { day: RoutineDay; routineId: string }) {
     setSaving(false)
   }
 
+  async function deleteRDE(id: string) {
+    const now = new Date().toISOString()
+    await db.routine_day_exercises.update(id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({ table: 'routine_day_exercises', record_id: id, op: 'delete', payload: { deleted_at: now }, ts: now })
+  }
+
   return (
     <div className="bg-gray-750 rounded-lg">
-      <button onClick={() => setOpen(!open)} className="w-full text-left px-3 py-2 text-gray-300 text-sm flex justify-between items-center">
-        <span>{day.name}</span>
-        <span className="text-gray-500">{open ? '▲' : '▼'}</span>
-      </button>
+      <div className="flex items-center gap-1">
+        <button onClick={() => setOpen(!open)} className="flex-1 text-left px-3 py-2 text-gray-300 text-sm flex justify-between items-center">
+          <span>{day.name}</span>
+          <span className="text-gray-500">{open ? '▲' : '▼'}</span>
+        </button>
+        <DeleteButton onConfirm={onDelete} size="sm" />
+      </div>
 
       {open && (
         <div className="px-3 pb-3 space-y-1.5">
           {rdes?.map((rde: RoutineDayExercise) => {
             const ex = exMap[rde.exercise_id]
             return ex ? (
-              <div key={rde.id} className="bg-gray-800 rounded-lg px-3 py-2">
-                <p className="text-white text-xs font-medium">{ex.name}</p>
-                <p className="text-gray-400 text-xs">
-                  {rde.target_sets} series · {rde.rep_min}–{rde.rep_max} reps
-                  {rde.target_weight_kg != null && <span className="ml-1">· {rde.target_weight_kg} kg</span>}
-                </p>
+              <div key={rde.id} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-medium">{ex.name}</p>
+                  <p className="text-gray-400 text-xs">
+                    {rde.target_sets} series · {rde.rep_min}–{rde.rep_max} reps
+                    {rde.target_weight_kg != null && <span className="ml-1">· {rde.target_weight_kg} kg</span>}
+                  </p>
+                </div>
+                <DeleteButton onConfirm={() => deleteRDE(rde.id)} size="sm" />
               </div>
             ) : null
           })}
@@ -279,7 +325,6 @@ function DayDetail({ day, routineId }: { day: RoutineDay; routineId: string }) {
                 </button>
               )}
 
-              {/* Campos de configuración — solo visibles tras elegir ejercicio */}
               {selectedExObj && (
                 <>
                   <div className="flex gap-2 flex-wrap">

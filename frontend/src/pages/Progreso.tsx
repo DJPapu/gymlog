@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db, type Session, type SessionExercise, type SetRecord } from '../db/schema'
 import { useAuth } from '../lib/auth'
+import { DeleteButton } from '../components/DeleteButton'
 
 export default function Progreso() {
   const { user } = useAuth()
@@ -55,6 +56,22 @@ export default function Progreso() {
 function SessionCard({ session, dayName }: { session: Session; dayName?: string }) {
   const [expanded, setExpanded] = useState(false)
 
+  async function deleteSession() {
+    const now = new Date().toISOString()
+    const ses = await db.session_exercises.filter((se) => se.session_id === session.id).toArray()
+    for (const se of ses) {
+      const allSets = await db.sets.filter((s) => s.session_exercise_id === se.id).toArray()
+      for (const s of allSets) {
+        await db.sets.update(s.id, { deleted_at: now, updated_at: now })
+        await db.outbox.add({ table: 'sets', record_id: s.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+      }
+      await db.session_exercises.update(se.id, { deleted_at: now, updated_at: now })
+      await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+    }
+    await db.sessions.update(session.id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({ table: 'sessions', record_id: session.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+  }
+
   const sessionExercises = useLiveQuery(
     () =>
       db.session_exercises
@@ -77,30 +94,35 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
 
   return (
     <div className="bg-gray-800 rounded-2xl overflow-hidden">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left px-4 py-4"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-white font-semibold leading-tight">
-              {dayName ?? 'Sesión libre'}
-            </p>
-            <p className="text-gray-400 text-xs mt-0.5 capitalize">
-              {dateStr} · {timeStr}
-            </p>
+      <div className="flex items-start">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-1 text-left px-4 py-4 min-w-0"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-white font-semibold leading-tight">
+                {dayName ?? 'Sesión libre'}
+              </p>
+              <p className="text-gray-400 text-xs mt-0.5 capitalize">
+                {dateStr} · {timeStr}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              {durationMin != null && (
+                <p className="text-gray-500 text-xs">{durationMin} min</p>
+              )}
+              {sessionExercises !== undefined && (
+                <p className="text-gray-600 text-xs">{sessionExercises.length} ejercicios</p>
+              )}
+              <span className="text-gray-600 text-xs block mt-1">{expanded ? '▲' : '▼'}</span>
+            </div>
           </div>
-          <div className="shrink-0 text-right">
-            {durationMin != null && (
-              <p className="text-gray-500 text-xs">{durationMin} min</p>
-            )}
-            {sessionExercises !== undefined && (
-              <p className="text-gray-600 text-xs">{sessionExercises.length} ejercicios</p>
-            )}
-            <span className="text-gray-600 text-xs block mt-1">{expanded ? '▲' : '▼'}</span>
-          </div>
+        </button>
+        <div className="pt-3 pr-2 shrink-0">
+          <DeleteButton onConfirm={deleteSession} size="sm" />
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-gray-700 px-4 pt-3 pb-4 space-y-4">
