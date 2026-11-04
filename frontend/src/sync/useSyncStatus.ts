@@ -8,6 +8,9 @@ export type SyncState = 'idle' | 'syncing' | 'warming' | 'error' | 'offline'
 
 const isNetworkError = (msg: string) => /fetch failed|load failed|network/i.test(msg)
 
+// Backoff: 5s, 10s, 15s, 25s → máx ~55s de espera total antes de rendirse
+const RETRY_DELAYS = [5_000, 10_000, 15_000, 25_000]
+
 export function useSyncStatus() {
   const pendingCount = useLiveQuery(() => db.outbox.count(), []) ?? 0
   const [state, setState] = useState<SyncState>(navigator.onLine ? 'idle' : 'offline')
@@ -28,31 +31,41 @@ export function useSyncStatus() {
       try {
         await sync()
         setState('idle')
+        return
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        if (!isNetworkError(msg)) {
+          console.warn('[sync] fallo no-red:', msg)
+          setLastError(msg)
+          setState('error')
+          return
+        }
+      }
 
-        if (isNetworkError(msg)) {
-          // Cold start de Render: esperar a que /health responda (hasta 120s)
-          // para saber exactamente cuándo está listo, y reintentar de inmediato.
-          setState('warming')
-          await wakeUpBackend()
-          setState('syncing')
-          try {
-            await sync()
-            setState('idle')
-            return
-          } catch (retryErr) {
-            const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+      // Error de red → Render probablemente dormido.
+      // Reintentamos con backoff hasta que responda (max ~55s).
+      setState('warming')
+      wakeUpBackend() // dispara el boot de Render en paralelo
+
+      for (const delay of RETRY_DELAYS) {
+        await new Promise<void>((r) => setTimeout(r, delay))
+        try {
+          await sync()
+          setState('idle')
+          return
+        } catch (retryErr) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+          if (!isNetworkError(retryMsg)) {
             setLastError(retryMsg)
             setState('error')
             return
           }
+          // Sigue siendo error de red → próximo intento
         }
-
-        console.warn('[sync] fallo:', msg)
-        setLastError(msg)
-        setState('error')
       }
+
+      setLastError('No se pudo conectar con el servidor tras varios intentos')
+      setState('error')
     } finally {
       isSyncing.current = false
     }

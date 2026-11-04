@@ -14,13 +14,8 @@ async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
   return headers
 }
 
-export async function wakeUpBackend(): Promise<void> {
-  try {
-    const controller = new AbortController()
-    const id = setTimeout(() => controller.abort(), 120_000)
-    await fetch(`${API_URL}/health`, { signal: controller.signal })
-    clearTimeout(id)
-  } catch { /* ignore */ }
+export function wakeUpBackend(): void {
+  fetch(`${API_URL}/health`).catch(() => { /* fire-and-forget: solo activa el boot de Render */ })
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
