@@ -8,8 +8,8 @@ export type SyncState = 'idle' | 'syncing' | 'warming' | 'error' | 'offline'
 
 const isNetworkError = (msg: string) => /fetch failed|load failed|network/i.test(msg)
 
-// Backoff: 5s, 10s, 15s, 25s → máx ~55s de espera total antes de rendirse
-const RETRY_DELAYS = [5_000, 10_000, 15_000, 25_000]
+// Backoff: 10s, 20s, 40s → reintentos en T=10, 30, 70s (Render tarda hasta 60s en arrancar)
+const RETRY_DELAYS = [10_000, 20_000, 40_000]
 
 export function useSyncStatus() {
   const pendingCount = useLiveQuery(() => db.outbox.count(), []) ?? 0
