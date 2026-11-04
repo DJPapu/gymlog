@@ -15,7 +15,12 @@ async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
 }
 
 export async function wakeUpBackend(): Promise<void> {
-  try { await fetch(`${API_URL}/health`) } catch { /* ignore — solo para despertar Render */ }
+  try {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), 120_000)
+    await fetch(`${API_URL}/health`, { signal: controller.signal })
+    clearTimeout(id)
+  } catch { /* ignore */ }
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
