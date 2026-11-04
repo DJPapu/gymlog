@@ -32,6 +32,11 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
+            // Backend: siempre red directa, sin cache ni interceptación del SW
+            urlPattern: /^https:\/\/gymlog-5y6y\.onrender\.com\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: 'NetworkFirst',
             options: { cacheName: 'supabase-cache', networkTimeoutSeconds: 10 },
