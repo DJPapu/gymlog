@@ -32,9 +32,17 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            // Backend: siempre red directa, sin cache ni interceptación del SW
+            // GET al backend: NetworkOnly (no caché, pasa directo a red)
             urlPattern: /^https:\/\/gymlog-5y6y\.onrender\.com\/.*/i,
             handler: 'NetworkOnly',
+          },
+          {
+            // POST al backend: hay que registrarlo explícitamente para que el SW
+            // llame respondWith() en iOS WebKit — si no lo hace, WebKit falla la
+            // request con "Load failed" en lugar de pasarla a la red (bug de WKWebView).
+            urlPattern: /^https:\/\/gymlog-5y6y\.onrender\.com\/.*/i,
+            handler: 'NetworkOnly',
+            method: 'POST',
           },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
