@@ -28,15 +28,16 @@ export function useSyncStatus() {
       setState('syncing')
       setLastError(null)
 
+      let lastMsg = ''
       try {
         await sync()
         setState('idle')
         return
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        if (!isNetworkError(msg)) {
-          console.warn('[sync] fallo no-red:', msg)
-          setLastError(msg)
+        lastMsg = err instanceof Error ? err.message : String(err)
+        if (!isNetworkError(lastMsg)) {
+          console.warn('[sync] fallo no-red:', lastMsg)
+          setLastError(lastMsg)
           setState('error')
           return
         }
@@ -46,8 +47,6 @@ export function useSyncStatus() {
       // Reintentamos con backoff hasta que responda (max ~50s).
       setState('warming')
       wakeUpBackend() // dispara el boot de Render en paralelo
-
-      let lastMsg = msg
       for (const delay of RETRY_DELAYS) {
         await new Promise<void>((r) => setTimeout(r, delay))
         try {
