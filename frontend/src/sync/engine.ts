@@ -70,16 +70,19 @@ export async function syncPull(): Promise<void> {
 }
 
 export async function sync(): Promise<void> {
-  try {
-    await syncPush()
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`[push] ${msg}`)
-  }
+  // Pull primero: el GET despierta Render y cachea el preflight CORS.
+  // Así el POST del push encuentra el backend ya vivo y su preflight OPTIONS
+  // resuelve rápido en lugar de colgar contra un servidor dormido.
   try {
     await syncPull()
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(`[pull] ${msg}`)
+  }
+  try {
+    await syncPush()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`[push] ${msg}`)
   }
 }
