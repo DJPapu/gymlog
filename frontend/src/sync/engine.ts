@@ -70,6 +70,16 @@ export async function syncPull(): Promise<void> {
 }
 
 export async function sync(): Promise<void> {
-  await syncPush()
-  await syncPull()
+  try {
+    await syncPush()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`[push] ${msg}`)
+  }
+  try {
+    await syncPull()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`[pull] ${msg}`)
+  }
 }

@@ -43,10 +43,11 @@ export function useSyncStatus() {
       }
 
       // Error de red → Render probablemente dormido.
-      // Reintentamos con backoff hasta que responda (max ~55s).
+      // Reintentamos con backoff hasta que responda (max ~50s).
       setState('warming')
       wakeUpBackend() // dispara el boot de Render en paralelo
 
+      let lastMsg = msg
       for (const delay of RETRY_DELAYS) {
         await new Promise<void>((r) => setTimeout(r, delay))
         try {
@@ -54,17 +55,16 @@ export function useSyncStatus() {
           setState('idle')
           return
         } catch (retryErr) {
-          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
-          if (!isNetworkError(retryMsg)) {
-            setLastError(retryMsg)
+          lastMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+          if (!isNetworkError(lastMsg)) {
+            setLastError(lastMsg)
             setState('error')
             return
           }
-          // Sigue siendo error de red → próximo intento
         }
       }
 
-      setLastError('No se pudo conectar con el servidor tras varios intentos')
+      setLastError(lastMsg)
       setState('error')
     } finally {
       isSyncing.current = false
