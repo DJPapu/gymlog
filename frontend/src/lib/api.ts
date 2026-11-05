@@ -18,10 +18,36 @@ export function wakeUpBackend(): void {
   fetch(`${API_URL}/health`).catch(() => { /* fire-and-forget: solo activa el boot de Render */ })
 }
 
+// XHR para métodos no-GET: bypass del Service Worker en iOS WKWebView.
+// El SW de Workbox intercepta fetch() pero NO XMLHttpRequest, así que el POST
+// va directo a la red evitando el bug de WKWebView con request bodies en SW.
+function xhrFetch<T>(url: string, method: string, headers: Record<string, string>, body?: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(method, url)
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText) as T)
+      } else {
+        reject(new Error(`API ${xhr.status}: ${xhr.responseText}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error(`Fetch failed (${url}): network error`))
+    xhr.ontimeout = () => reject(new Error(`Fetch failed (${url}): timeout`))
+    xhr.send(body ?? null)
+  })
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = await getAuthHeaders(method)
   const url = `${API_URL}${path}`
+
+  if (method !== 'GET') {
+    return xhrFetch<T>(url, method, { ...headers, ...(init.headers as Record<string, string> | undefined) }, init.body as string | undefined)
+  }
+
   let res: Response
   try {
     res = await fetch(url, { ...init, headers: { ...headers, ...init.headers } })
