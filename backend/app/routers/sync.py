@@ -33,6 +33,18 @@ _TABLE_MAP = {
 # Tablas cuyo user_id debe forzarse desde el JWT
 _USER_ID_TABLES = {"routines", "sessions"}
 
+# Orden topológico para satisfacer FKs: padres antes que hijos.
+# Sin relationship() en los modelos SQLAlchemy no puede deducirlo solo.
+_TABLE_ORDER = {
+    "exercises": 0,
+    "routines": 1,
+    "routine_days": 2,
+    "sessions": 2,
+    "routine_day_exercises": 3,
+    "session_exercises": 3,
+    "sets": 4,
+}
+
 
 def _parse_dt(value: Any) -> datetime | None:
     if not value:
@@ -66,7 +78,13 @@ def sync_push(
     applied = 0
     errors: list[str] = []
 
-    for change in body.changes:
+    # Orden topológico: padres antes que hijos para no violar FKs durante el flush
+    sorted_changes = sorted(
+        body.changes,
+        key=lambda c: _TABLE_ORDER.get(c.table, 99),
+    )
+
+    for change in sorted_changes:
         try:
             model_cls = _TABLE_MAP.get(change.table)
             if model_cls is None:
@@ -84,36 +102,45 @@ def sync_push(
                 if field in payload:
                     payload[field] = _parse_dt(payload[field])
 
-            if change.op == "upsert":
-                existing = db.get(model_cls, change.record_id)
-                incoming_ts = payload.get("updated_at")
+            # Savepoint por cambio: un error no contamina el resto de la sesión
+            with db.begin_nested():
+                if change.op == "upsert":
+                    existing = db.get(model_cls, change.record_id)
+                    incoming_ts = payload.get("updated_at")
 
-                if existing is None:
-                    obj = model_cls(**payload)
-                    db.add(obj)
-                else:
-                    # Last-write-wins por updated_at
-                    existing_ts = existing.updated_at
-                    if (
-                        incoming_ts is None
-                        or existing_ts is None
-                        or incoming_ts > existing_ts
-                    ):
-                        for k, v in payload.items():
-                            if hasattr(existing, k):
-                                setattr(existing, k, v)
-                applied += 1
+                    if existing is None:
+                        obj = model_cls(**payload)
+                        db.add(obj)
+                    else:
+                        # Last-write-wins por updated_at
+                        existing_ts = existing.updated_at
+                        if (
+                            incoming_ts is None
+                            or existing_ts is None
+                            or incoming_ts > existing_ts
+                        ):
+                            for k, v in payload.items():
+                                if hasattr(existing, k):
+                                    setattr(existing, k, v)
 
-            elif change.op == "delete":
-                existing = db.get(model_cls, change.record_id)
-                if existing:
-                    existing.deleted_at = _parse_dt(payload.get("deleted_at")) or datetime.now(timezone.utc)
-                    applied += 1
+                elif change.op == "delete":
+                    existing = db.get(model_cls, change.record_id)
+                    if existing:
+                        existing.deleted_at = (
+                            _parse_dt(payload.get("deleted_at")) or datetime.now(timezone.utc)
+                        )
+
+            applied += 1
 
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{change.table}/{change.record_id}: {exc!s}")
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        errors.append(f"commit error: {exc!s}")
+
     return SyncPushResponse(applied=applied, errors=errors)
 
 
