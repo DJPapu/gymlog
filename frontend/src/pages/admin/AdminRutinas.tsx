@@ -386,7 +386,7 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
             <span className="text-gray-500 text-xs">rep</span>
           </div>
           <div className="flex items-center gap-1">
-            <input type="number" inputMode="decimal" value={addWeight} onChange={(e) => setAddWeight(e.target.value)} min={0} step={2.5} placeholder="—"
+            <input type="number" inputMode="decimal" value={addWeight} onChange={(e) => setAddWeight(e.target.value)} min={0} step={0.5} placeholder="—"
               className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-1.5 text-white text-xs text-center focus:outline-none focus:border-indigo-500" />
             <span className="text-gray-500 text-xs">kg</span>
           </div>
@@ -455,7 +455,7 @@ function ExerciseRow({
             className="w-12 bg-gray-700 border border-indigo-500 rounded px-1 py-0.5 text-white text-xs text-center focus:outline-none" />
         </td>
         <td className="px-2 py-1.5 text-center">
-          <input type="number" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} min={0} step={ex.weight_increment_kg ?? 2.5} placeholder="—"
+          <input type="number" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} min={0} step={0.5} placeholder="—"
             className="w-16 bg-gray-700 border border-indigo-500 rounded px-1 py-0.5 text-white text-xs text-center focus:outline-none" />
         </td>
         <td className="pl-2 py-1.5">

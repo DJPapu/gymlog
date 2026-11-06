@@ -293,7 +293,7 @@ async function addSet(sessionExerciseId: string) {
 // ── Fila de serie ───────────────────────────────────────────────────────────
 
 function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
-  const increment = exercise.weight_increment_kg
+  const increment = 0.5
 
   async function update(patch: Partial<SetRecord>) {
     const now = new Date().toISOString()

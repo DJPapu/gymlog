@@ -447,7 +447,7 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
                     </div>
                     <div className="flex gap-1 items-center">
                       <input type="number" inputMode="decimal" value={editTargetWeight} onChange={(e) => setEditTargetWeight(e.target.value)}
-                        min={0} step={ex.weight_increment_kg ?? 2.5} placeholder="—"
+                        min={0} step={0.5} placeholder="—"
                         className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
                       <span className="text-gray-500 text-xs">kg</span>
                     </div>
@@ -541,7 +541,7 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
                         value={targetWeight}
                         onChange={(e) => setTargetWeight(e.target.value)}
                         min={0}
-                        step={selectedExObj.weight_increment_kg ?? 2.5}
+                        step={0.5}
                         className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none"
                         placeholder="—"
                       />
