@@ -4,6 +4,7 @@ import BottomNav from './components/BottomNav'
 import SplashScreen from './components/SplashScreen'
 import SyncBadge from './components/SyncBadge'
 import { useAuth } from './lib/auth'
+import AdminApp from './pages/admin/AdminApp'
 import Ejercicios from './pages/Ejercicios'
 import Hoy from './pages/Hoy'
 import Login from './pages/Login'
@@ -15,7 +16,7 @@ import { useSyncStatus } from './sync/useSyncStatus'
 // En dev (VITE_SUPABASE_URL = placeholder) se salta el login
 const AUTH_REQUIRED = !import.meta.env.VITE_SUPABASE_URL?.includes('placeholder')
 
-function AppShell() {
+function MobileShell() {
   const location = useLocation()
   const inSession = location.pathname.startsWith('/sesion/')
   const { state, pendingCount, doSync, lastError } = useSyncStatus()
@@ -61,7 +62,10 @@ export default function App() {
   return (
     <Router>
       {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
-      <AppShell />
+      <Routes>
+        <Route path="/admin/*" element={<AdminApp />} />
+        <Route path="/*" element={<MobileShell />} />
+      </Routes>
     </Router>
   )
 }
