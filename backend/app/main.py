@@ -10,8 +10,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=86400,  # cachear preflights 24h — una vez que pasa, no vuelve a preguntar
 )
 
 app.include_router(exercises.router)
