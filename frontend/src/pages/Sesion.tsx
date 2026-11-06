@@ -24,11 +24,10 @@ export default function Sesion() {
     if (!sessionId || !session) return
     setFinishing(true)
     const now = new Date().toISOString()
-    navigate('/')  // navegar primero; escrituras en segundo plano
+    navigate('/')
 
     await db.sessions.update(sessionId, { ended_at: now, updated_at: now })
 
-    // Volcar estado completo de la sesión al outbox (session + exercises + sets)
     const ses = await db.session_exercises
       .filter((se) => se.session_id === sessionId && !se.deleted_at)
       .toArray()
@@ -54,19 +53,18 @@ export default function Sesion() {
   if (!session || session.ended_at) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-500">Sesión no encontrada</p>
+        <p className="text-gray-400">Sesión no encontrada</p>
       </div>
     )
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-800">
-        <button onClick={() => navigate('/')} className="text-gray-400 text-sm min-h-[44px] px-2">
+      <header className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-200">
+        <button onClick={() => navigate('/')} className="text-gray-500 text-sm min-h-[44px] px-2">
           ← Atrás
         </button>
-        <h2 className="text-base font-bold text-white">Sesión en curso</h2>
+        <h2 className="text-base font-bold text-gray-900">Sesión en curso</h2>
         <button
           onClick={finishSession}
           disabled={finishing}
@@ -76,9 +74,8 @@ export default function Sesion() {
         </button>
       </header>
 
-      {/* Lista de ejercicios */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 pb-6">
-        {sessionExercises === undefined && <p className="text-gray-500 text-sm">Cargando...</p>}
+        {sessionExercises === undefined && <p className="text-gray-400 text-sm">Cargando...</p>}
         {sessionExercises?.map((se: SessionExercise) => (
           <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} routineDayId={session.routine_day_id ?? null} />
         ))}
@@ -166,32 +163,32 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
   if (!exercise) return null
 
   return (
-    <div className="bg-gray-800 rounded-2xl overflow-hidden">
+    <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
       {/* Cabecera ejercicio */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h3 className="text-white font-bold text-base leading-tight">{exercise.name}</h3>
+            <h3 className="text-gray-900 font-bold text-base leading-tight">{exercise.name}</h3>
             {rde && (
-              <p className="text-emerald-500 text-xs mt-0.5">
+              <p className="text-emerald-600 text-xs mt-0.5">
                 Objetivo: {rde.target_sets}×{rde.rep_min}–{rde.rep_max} reps
                 {rde.target_weight_kg != null && ` · ${rde.target_weight_kg} kg`}
               </p>
             )}
             {lastSummary && (
-              <p className="text-indigo-400 text-xs mt-0.5">
+              <p className="text-indigo-600 text-xs mt-0.5">
                 Última vez: {lastSummary.display}
               </p>
             )}
             {exercise.setup_tips && (
-              <p className="text-gray-500 text-xs mt-0.5 line-clamp-1">{exercise.setup_tips}</p>
+              <p className="text-gray-400 text-xs mt-0.5 line-clamp-1">{exercise.setup_tips}</p>
             )}
           </div>
           <div className="shrink-0 text-right">
             <span className="text-xs text-gray-400">{completedCount}/{totalCount} series</span>
             <button
               onClick={() => setShowNote(!showNote)}
-              className="block text-gray-500 text-xs mt-1 hover:text-gray-300"
+              className="block text-gray-400 text-xs mt-1 hover:text-gray-600"
             >
               {se.notes ? '📝 nota' : '+ nota'}
             </button>
@@ -204,15 +201,15 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Nota del ejercicio..."
-              className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+              className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 text-xs focus:outline-none focus:border-indigo-500"
             />
-            <button onClick={saveNote} className="text-indigo-400 text-xs px-2">✓</button>
+            <button onClick={saveNote} className="text-indigo-600 text-xs px-2">✓</button>
           </div>
         )}
       </div>
 
       {/* Cabecera columnas */}
-      <div className="px-4 pb-1 grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 text-xs text-gray-500">
+      <div className="px-4 pb-1 grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 text-xs text-gray-400">
         <span>#</span>
         <span className="text-center">Peso (kg)</span>
         <span className="text-center">Reps</span>
@@ -220,7 +217,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
       </div>
 
       {/* Sets */}
-      <div className="divide-y divide-gray-700/50">
+      <div className="divide-y divide-gray-100">
         {sets?.map((set: SetRecord) => (
           <SetRow key={set.id} set={set} exercise={exercise} />
         ))}
@@ -230,7 +227,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
       <div className="px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => addSet(se.id)}
-          className="text-indigo-400 text-sm hover:text-indigo-300"
+          className="text-indigo-600 text-sm hover:text-indigo-500"
         >
           + Añadir serie
         </button>
@@ -239,8 +236,8 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
 
       {/* Sugerencia de actualizar objetivo */}
       {updatePrompt && (
-        <div className="px-4 pb-4 pt-3 border-t border-indigo-800/40 bg-indigo-950/30">
-          <p className="text-indigo-200 text-xs mb-3 leading-relaxed">
+        <div className="px-4 pb-4 pt-3 border-t border-indigo-100 bg-indigo-50">
+          <p className="text-indigo-700 text-xs mb-3 leading-relaxed">
             {updatePrompt.direction === 'up'
               ? `Superaste el objetivo (${updatePrompt.currentTarget} kg → máx ${updatePrompt.suggestedWeight} kg). ¿Subir el objetivo?`
               : `Quedaste por debajo del objetivo (${updatePrompt.currentTarget} kg → máx ${updatePrompt.suggestedWeight} kg). ¿Bajar el objetivo?`}
@@ -292,7 +289,7 @@ async function addSet(sessionExerciseId: string) {
 
 // ── Fila de serie ───────────────────────────────────────────────────────────
 
-function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
+function SetRow({ set }: { set: SetRecord; exercise: Exercise }) {
   const increment = 0.5
 
   async function update(patch: Partial<SetRecord>) {
@@ -313,7 +310,7 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
   return (
     <div
       className={`px-4 py-2.5 transition-colors ${
-        set.completed ? 'bg-green-950/30' : ''
+        set.completed ? 'bg-green-50' : ''
       }`}
     >
       <div className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 items-center">
@@ -326,7 +323,7 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
         <div className="flex items-center justify-center gap-1">
           <button
             onClick={() => update({ weight_kg: Math.max(0, (set.weight_kg ?? 0) - increment) })}
-            className="w-8 h-8 bg-gray-700 rounded-lg text-white text-lg flex items-center justify-center active:bg-gray-600 min-h-[44px] min-w-[44px]"
+            className="w-8 h-8 bg-gray-100 rounded-lg text-gray-700 text-lg flex items-center justify-center active:bg-gray-200 min-h-[44px] min-w-[44px]"
           >
             −
           </button>
@@ -337,11 +334,11 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
             min={0}
             value={set.weight_kg ?? ''}
             onChange={(e) => update({ weight_kg: e.target.value ? parseFloat(e.target.value) : null })}
-            className="w-14 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm text-center py-1.5 focus:outline-none focus:border-indigo-500"
+            className="w-14 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm text-center py-1.5 focus:outline-none focus:border-indigo-500"
           />
           <button
             onClick={() => update({ weight_kg: (set.weight_kg ?? 0) + increment })}
-            className="w-8 h-8 bg-gray-700 rounded-lg text-white text-lg flex items-center justify-center active:bg-gray-600 min-h-[44px] min-w-[44px]"
+            className="w-8 h-8 bg-gray-100 rounded-lg text-gray-700 text-lg flex items-center justify-center active:bg-gray-200 min-h-[44px] min-w-[44px]"
           >
             +
           </button>
@@ -351,7 +348,7 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
         <div className="flex items-center justify-center gap-1">
           <button
             onClick={() => update({ reps: Math.max(1, (set.reps ?? 1) - 1) })}
-            className="w-8 h-8 bg-gray-700 rounded-lg text-white text-lg flex items-center justify-center active:bg-gray-600 min-h-[44px] min-w-[44px]"
+            className="w-8 h-8 bg-gray-100 rounded-lg text-gray-700 text-lg flex items-center justify-center active:bg-gray-200 min-h-[44px] min-w-[44px]"
           >
             −
           </button>
@@ -361,11 +358,11 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
             min={1}
             value={set.reps ?? ''}
             onChange={(e) => update({ reps: e.target.value ? parseInt(e.target.value) : null })}
-            className="w-10 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm text-center py-1.5 focus:outline-none focus:border-indigo-500"
+            className="w-10 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm text-center py-1.5 focus:outline-none focus:border-indigo-500"
           />
           <button
             onClick={() => update({ reps: (set.reps ?? 0) + 1 })}
-            className="w-8 h-8 bg-gray-700 rounded-lg text-white text-lg flex items-center justify-center active:bg-gray-600 min-h-[44px] min-w-[44px]"
+            className="w-8 h-8 bg-gray-100 rounded-lg text-gray-700 text-lg flex items-center justify-center active:bg-gray-200 min-h-[44px] min-w-[44px]"
           >
             +
           </button>
@@ -377,7 +374,7 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
           className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold min-h-[44px] min-w-[44px] transition-colors ${
             set.completed
               ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
           }`}
         >
           ✓
@@ -390,8 +387,8 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
           onClick={() => setShowRPE(!showRPE)}
           className={`text-xs px-2 py-1 rounded-lg min-h-[32px] ${
             set.rpe != null
-              ? 'bg-amber-900/50 text-amber-300'
-              : 'text-gray-500 hover:text-gray-400'
+              ? 'bg-amber-50 text-amber-700'
+              : 'text-gray-400 hover:text-gray-600'
           }`}
         >
           {set.rpe != null ? `RPE ${set.rpe}` : 'RPE'}
@@ -399,7 +396,7 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
         <button
           onClick={() => setShowNote(!showNote)}
           className={`text-xs px-2 py-1 rounded-lg min-h-[32px] ${
-            set.notes ? 'text-gray-300' : 'text-gray-500 hover:text-gray-400'
+            set.notes ? 'text-gray-700' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
           {set.notes ? '📝' : '+ nota'}
@@ -416,7 +413,7 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
               className={`px-3 py-1.5 rounded-lg text-xs font-mono min-h-[36px] ${
                 set.rpe === v
                   ? 'bg-amber-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {v}
@@ -424,7 +421,7 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
           ))}
           <button
             onClick={() => { update({ rpe: null }); setShowRPE(false) }}
-            className="px-3 py-1.5 rounded-lg text-xs text-gray-500 bg-gray-700 min-h-[36px]"
+            className="px-3 py-1.5 rounded-lg text-xs text-gray-400 bg-gray-100 min-h-[36px]"
           >
             Quitar
           </button>
@@ -438,11 +435,11 @@ function SetRow({ set, exercise }: { set: SetRecord; exercise: Exercise }) {
             value={noteVal}
             onChange={(e) => setNoteVal(e.target.value)}
             placeholder="Nota de la serie..."
-            className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+            className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 text-xs focus:outline-none focus:border-indigo-500"
           />
           <button
             onClick={() => { db.sets.update(set.id, { notes: noteVal || null, updated_at: new Date().toISOString() }); setShowNote(false) }}
-            className="text-indigo-400 text-xs px-2"
+            className="text-indigo-600 text-xs px-2"
           >
             ✓
           </button>

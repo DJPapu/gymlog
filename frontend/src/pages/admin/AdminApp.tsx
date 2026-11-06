@@ -23,15 +23,15 @@ function AdminShell() {
   const tab = location.pathname.split('/')[2] ?? 'rutinas'
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
-      <header className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-6 shrink-0">
-        <span className="text-white font-bold tracking-tight">GymLog Admin</span>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6 shrink-0 shadow-sm">
+        <span className="text-gray-900 font-bold tracking-tight">GymLog Admin</span>
         <nav className="flex gap-1 flex-1">
           <TabLink to="/admin/rutinas" active={tab === 'rutinas'}>Rutinas</TabLink>
           <TabLink to="/admin/catalogo" active={tab === 'catalogo'}>Catálogo</TabLink>
         </nav>
         <SyncBadge state={state} pendingCount={pendingCount} onSync={doSync} lastError={lastError} />
-        <Link to="/" className="text-gray-500 hover:text-white text-sm transition-colors">← App móvil</Link>
+        <Link to="/" className="text-gray-400 hover:text-gray-700 text-sm transition-colors">← App móvil</Link>
       </header>
 
       <main className="flex-1 overflow-auto p-6">
@@ -50,7 +50,7 @@ function TabLink({ to, active, children }: { to: string; active: boolean; childr
     <Link
       to={to}
       className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-        active ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+        active ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
       }`}
     >
       {children}

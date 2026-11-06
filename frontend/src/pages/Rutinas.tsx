@@ -64,7 +64,7 @@ export default function Rutinas() {
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-4 pt-4 pb-3">
-        <h2 className="text-xl font-bold text-white">Rutinas</h2>
+        <h2 className="text-xl font-bold text-gray-900">Rutinas</h2>
         <button
           onClick={() => setShowNew(true)}
           className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-xl min-h-[44px]"
@@ -75,18 +75,18 @@ export default function Rutinas() {
 
       <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-4">
         {routines?.length === 0 && (
-          <p className="text-gray-500 text-sm text-center mt-8">Sin rutinas. ¡Crea la primera!</p>
+          <p className="text-gray-400 text-sm text-center mt-8">Sin rutinas. ¡Crea la primera!</p>
         )}
         {routines?.map((r: Routine) => (
           <div key={r.id}>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setSelected(selected === r.id ? null : r.id)}
-                className="flex-1 bg-gray-800 rounded-xl px-4 py-3 text-left"
+                className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 text-left"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-white font-medium">{r.name}</span>
-                  <span className="text-gray-500 text-sm">{selected === r.id ? '▲' : '▼'}</span>
+                  <span className="text-gray-900 font-medium">{r.name}</span>
+                  <span className="text-gray-400 text-sm">{selected === r.id ? '▲' : '▼'}</span>
                 </div>
               </button>
               <DeleteButton onConfirm={() => deleteRoutine(r.id)} />
@@ -98,29 +98,29 @@ export default function Rutinas() {
 
       {/* Modal nueva rutina */}
       {showNew && (
-        <div className="fixed inset-0 bg-black/70 flex items-end z-50" onClick={() => setShowNew(false)}>
-          <div className="bg-gray-900 rounded-t-2xl w-full p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Nueva rutina</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowNew(false)}>
+          <div className="bg-white rounded-t-2xl w-full p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900">Nueva rutina</h3>
             <form onSubmit={createRoutine} className="space-y-3">
               <input
                 required
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="Ej: PPL, Full Body..."
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-indigo-500"
               />
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="text-gray-400 text-xs mb-1 block">Fecha de inicio</label>
+                  <label className="text-gray-600 text-xs mb-1 block">Fecha de inicio</label>
                   <input
                     type="date"
                     value={newStartDate}
                     onChange={(e) => setNewStartDate(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="w-28">
-                  <label className="text-gray-400 text-xs mb-1 block">Duración (sem.)</label>
+                  <label className="text-gray-600 text-xs mb-1 block">Duración (sem.)</label>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -129,12 +129,12 @@ export default function Rutinas() {
                     value={newDurationWeeks}
                     onChange={(e) => setNewDurationWeeks(e.target.value)}
                     placeholder="—"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm text-center focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm text-center focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setShowNew(false)} className="flex-1 bg-gray-700 text-white font-semibold py-3 rounded-xl min-h-[44px] text-sm">
+                <button type="button" onClick={() => setShowNew(false)} className="flex-1 bg-gray-100 text-gray-700 font-semibold py-3 rounded-xl min-h-[44px] text-sm">
                   Cancelar
                 </button>
                 <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl min-h-[44px] text-sm">
@@ -201,7 +201,7 @@ function RoutineDetail({ routineId }: { routineId: string }) {
             value={dayName}
             onChange={(e) => setDayName(e.target.value)}
             placeholder="Ej: Día A – Empuje"
-            className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-indigo-500"
           />
           <button type="button" onClick={() => setShowNewDay(false)} className="text-gray-400 px-2 text-sm">✕</button>
           <button type="submit" disabled={saving} className="bg-indigo-600 text-white text-sm px-3 py-2 rounded-lg min-h-[44px]">
@@ -211,7 +211,7 @@ function RoutineDetail({ routineId }: { routineId: string }) {
       ) : (
         <button
           onClick={() => setShowNewDay(true)}
-          className="text-indigo-400 text-sm py-2 hover:text-indigo-300"
+          className="text-indigo-600 text-sm py-2 hover:text-indigo-500"
         >
           + Añadir día
         </button>
@@ -223,7 +223,6 @@ function RoutineDetail({ routineId }: { routineId: string }) {
 function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: string; onDelete: () => void }) {
   const [open, setOpen] = useState(false)
 
-  // --- editar nombre del día ---
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState(day.name)
 
@@ -246,13 +245,11 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
   const [editRepMax, setEditRepMax] = useState(12)
   const [editTargetWeight, setEditTargetWeight] = useState('')
 
-  // --- drag para reordenar ejercicios ---
   const [dragging, setDragging] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 
-  // Lista visual: reordena durante el drag sin tocar Dexie todavía
   const displayedRdes = useMemo(() => {
     if (!rdes) return []
     if (dragging === null || dragOver === null || dragging === dragOver) return rdes
@@ -334,7 +331,6 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
     setEditingRDE(null)
   }
 
-  // --- handlers de drag ---
   function handleDragPointerDown(e: React.PointerEvent, index: number) {
     e.preventDefault()
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -386,7 +382,7 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
   }
 
   return (
-    <div className="bg-gray-750 rounded-lg">
+    <div className="bg-white rounded-lg border border-gray-100 shadow-sm">
       <div className="flex items-center gap-1">
         {editingName ? (
           <>
@@ -398,20 +394,20 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
                 if (e.key === 'Enter') saveDayName()
                 if (e.key === 'Escape') { setEditingName(false); setNameInput(day.name) }
               }}
-              className="flex-1 ml-3 bg-gray-700 border border-indigo-500 rounded-lg px-2 py-1.5 text-white text-sm focus:outline-none"
+              className="flex-1 ml-3 bg-white border border-indigo-500 rounded-lg px-2 py-1.5 text-gray-900 text-sm focus:outline-none"
             />
-            <button onClick={saveDayName} className="text-indigo-400 hover:text-indigo-300 flex items-center justify-center min-w-[36px] min-h-[36px] text-base">✓</button>
-            <button onClick={() => { setEditingName(false); setNameInput(day.name) }} className="text-gray-500 flex items-center justify-center min-w-[36px] min-h-[36px] text-sm">✕</button>
+            <button onClick={saveDayName} className="text-indigo-600 hover:text-indigo-500 flex items-center justify-center min-w-[36px] min-h-[36px] text-base">✓</button>
+            <button onClick={() => { setEditingName(false); setNameInput(day.name) }} className="text-gray-400 flex items-center justify-center min-w-[36px] min-h-[36px] text-sm">✕</button>
           </>
         ) : (
           <>
-            <button onClick={() => setOpen(!open)} className="flex-1 text-left px-3 py-2 text-gray-300 text-sm flex justify-between items-center">
+            <button onClick={() => setOpen(!open)} className="flex-1 text-left px-3 py-2 text-gray-700 text-sm flex justify-between items-center">
               <span>{day.name}</span>
-              <span className="text-gray-500">{open ? '▲' : '▼'}</span>
+              <span className="text-gray-400">{open ? '▲' : '▼'}</span>
             </button>
             <button
               onClick={() => { setEditingName(true); setNameInput(day.name) }}
-              className="text-gray-600 hover:text-indigo-400 flex items-center justify-center min-w-[36px] min-h-[36px] shrink-0"
+              className="text-gray-300 hover:text-indigo-600 flex items-center justify-center min-w-[36px] min-h-[36px] shrink-0"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -423,33 +419,33 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
       </div>
 
       {open && (
-        <div className="px-3 pb-3 space-y-1.5">
+        <div className="px-3 pb-3 space-y-1.5 border-t border-gray-100 pt-2">
           {displayedRdes.map((rde: RoutineDayExercise, index: number) => {
             const ex = exMap[rde.exercise_id]
             if (!ex) return null
             if (editingRDE === rde.id) {
               return (
-                <div key={rde.id} ref={(el) => { itemRefs.current[index] = el }} className="bg-gray-800 rounded-lg px-3 py-2.5">
-                  <p className="text-white text-xs font-semibold mb-2">{ex.name}</p>
+                <div key={rde.id} ref={(el) => { itemRefs.current[index] = el }} className="bg-slate-50 rounded-lg border border-gray-100 px-3 py-2.5">
+                  <p className="text-gray-900 text-xs font-semibold mb-2">{ex.name}</p>
                   <div className="flex gap-2 flex-wrap items-center mb-2.5">
                     <div className="flex gap-1 items-center">
                       <input type="number" inputMode="numeric" value={editSets} onChange={(e) => setEditSets(+e.target.value)} min={1} max={10}
-                        className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
-                      <span className="text-gray-500 text-xs">ser</span>
+                        className="w-12 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">ser</span>
                     </div>
                     <div className="flex gap-1 items-center">
                       <input type="number" inputMode="numeric" value={editRepMin} onChange={(e) => setEditRepMin(+e.target.value)} min={1}
-                        className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
-                      <span className="text-gray-500 text-xs">–</span>
+                        className="w-12 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">–</span>
                       <input type="number" inputMode="numeric" value={editRepMax} onChange={(e) => setEditRepMax(+e.target.value)} min={1}
-                        className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
-                      <span className="text-gray-500 text-xs">rep</span>
+                        className="w-12 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">rep</span>
                     </div>
                     <div className="flex gap-1 items-center">
                       <input type="number" inputMode="decimal" value={editTargetWeight} onChange={(e) => setEditTargetWeight(e.target.value)}
                         min={0} step={0.5} placeholder="—"
-                        className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
-                      <span className="text-gray-500 text-xs">kg</span>
+                        className="w-16 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">kg</span>
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">
@@ -463,27 +459,26 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
               <div
                 key={rde.id}
                 ref={(el) => { itemRefs.current[index] = el }}
-                className={`bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-1.5 transition-opacity ${rde.id === draggingId ? 'opacity-50 ring-1 ring-indigo-500' : ''}`}
+                className={`bg-slate-50 rounded-lg border border-gray-100 px-3 py-2 flex items-center gap-1.5 transition-opacity ${rde.id === draggingId ? 'opacity-50 ring-1 ring-indigo-500' : ''}`}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-xs font-medium">{ex.name}</p>
-                  <p className="text-gray-400 text-xs">
+                  <p className="text-gray-900 text-xs font-medium">{ex.name}</p>
+                  <p className="text-gray-500 text-xs">
                     {rde.target_sets} series · {rde.rep_min}–{rde.rep_max} reps
-                    {rde.target_weight_kg != null && <span className="ml-1 text-emerald-500">· {rde.target_weight_kg} kg</span>}
+                    {rde.target_weight_kg != null && <span className="ml-1 text-emerald-600">· {rde.target_weight_kg} kg</span>}
                   </p>
                 </div>
                 <button
                   onClick={() => startEdit(rde)}
-                  className="text-gray-500 hover:text-indigo-400 transition-colors flex items-center justify-center min-h-[36px] min-w-[36px] shrink-0"
+                  className="text-gray-300 hover:text-indigo-600 transition-colors flex items-center justify-center min-h-[36px] min-w-[36px] shrink-0"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                   </svg>
                 </button>
                 <DeleteButton onConfirm={() => deleteRDE(rde.id)} size="sm" />
-                {/* Handle de arrastre — manteniendo pulsado y arrastrando reordena */}
                 <div
-                  className="touch-none select-none text-gray-600 hover:text-gray-400 flex items-center justify-center min-w-[36px] min-h-[44px] shrink-0 cursor-grab active:cursor-grabbing"
+                  className="touch-none select-none text-gray-300 hover:text-gray-500 flex items-center justify-center min-w-[36px] min-h-[44px] shrink-0 cursor-grab active:cursor-grabbing"
                   onPointerDown={(e) => handleDragPointerDown(e, index)}
                   onPointerMove={handleDragPointerMove}
                   onPointerUp={handleDragPointerUp}
@@ -501,23 +496,22 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
 
           {showAdd ? (
             <form onSubmit={addExercise} className="space-y-2 mt-2">
-              {/* Picker de ejercicio con thumbnails */}
               {!selectedExObj ? (
                 <ExercisePicker exercises={exercises ?? []} onPick={handlePickExercise} />
               ) : (
                 <button
                   type="button"
                   onClick={() => { setSelectedEx(''); setSelectedExObj(null) }}
-                  className="w-full flex items-center gap-2 bg-indigo-900/40 border border-indigo-700 rounded-lg p-2 text-left"
+                  className="w-full flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg p-2 text-left"
                 >
                   {selectedExObj.photo_ref && (
                     <img src={`/${selectedExObj.photo_ref}`} className="w-10 h-10 object-cover rounded" alt="" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-indigo-200 text-xs font-medium truncate">{selectedExObj.name}</p>
-                    <p className="text-indigo-400 text-xs">{selectedExObj.primary_muscle}</p>
+                    <p className="text-indigo-700 text-xs font-medium truncate">{selectedExObj.name}</p>
+                    <p className="text-indigo-500 text-xs">{selectedExObj.primary_muscle}</p>
                   </div>
-                  <span className="text-gray-500 text-xs">✕</span>
+                  <span className="text-gray-400 text-xs">✕</span>
                 </button>
               )}
 
@@ -525,14 +519,14 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
                 <>
                   <div className="flex gap-2 flex-wrap">
                     <div className="flex gap-1 items-center">
-                      <input type="number" inputMode="numeric" value={sets} onChange={(e) => setSets(+e.target.value)} min={1} max={10} className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
-                      <span className="text-gray-500 text-xs">ser</span>
+                      <input type="number" inputMode="numeric" value={sets} onChange={(e) => setSets(+e.target.value)} min={1} max={10} className="w-12 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">ser</span>
                     </div>
                     <div className="flex gap-1 items-center">
-                      <input type="number" inputMode="numeric" value={repMin} onChange={(e) => setRepMin(+e.target.value)} min={1} className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
-                      <span className="text-gray-500 text-xs">–</span>
-                      <input type="number" inputMode="numeric" value={repMax} onChange={(e) => setRepMax(+e.target.value)} min={1} className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none" />
-                      <span className="text-gray-500 text-xs">rep</span>
+                      <input type="number" inputMode="numeric" value={repMin} onChange={(e) => setRepMin(+e.target.value)} min={1} className="w-12 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">–</span>
+                      <input type="number" inputMode="numeric" value={repMax} onChange={(e) => setRepMax(+e.target.value)} min={1} className="w-12 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">rep</span>
                     </div>
                     <div className="flex gap-1 items-center">
                       <input
@@ -542,10 +536,10 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
                         onChange={(e) => setTargetWeight(e.target.value)}
                         min={0}
                         step={0.5}
-                        className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none"
+                        className="w-16 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500"
                         placeholder="—"
                       />
-                      <span className="text-gray-500 text-xs">kg</span>
+                      <span className="text-gray-400 text-xs">kg</span>
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">
@@ -558,11 +552,11 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
               )}
 
               {!selectedExObj && (
-                <button type="button" onClick={() => setShowAdd(false)} className="text-gray-500 text-xs w-full text-center pt-1">Cancelar</button>
+                <button type="button" onClick={() => setShowAdd(false)} className="text-gray-400 text-xs w-full text-center pt-1">Cancelar</button>
               )}
             </form>
           ) : (
-            <button onClick={() => setShowAdd(true)} className="text-indigo-400 text-xs py-1 hover:text-indigo-300">
+            <button onClick={() => setShowAdd(true)} className="text-indigo-600 text-xs py-1 hover:text-indigo-500">
               + Ejercicio
             </button>
           )}
@@ -573,8 +567,6 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
 }
 
 // ── Picker de ejercicio con thumbnails, lightbox y agrupación por músculo ───
-
-
 
 function ExercisePicker({ exercises, onPick }: { exercises: Exercise[]; onPick: (ex: Exercise) => void }) {
   const [search, setSearch] = useState('')
@@ -595,15 +587,15 @@ function ExercisePicker({ exercises, onPick }: { exercises: Exercise[]; onPick: 
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar ejercicio..."
-          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-xs focus:outline-none focus:border-indigo-500"
         />
-        <div className="max-h-52 overflow-y-auto rounded-lg">
+        <div className="max-h-52 overflow-y-auto rounded-lg border border-gray-100">
           {groups.length === 0 && (
-            <p className="text-gray-500 text-xs text-center py-3">Sin resultados</p>
+            <p className="text-gray-400 text-xs text-center py-3">Sin resultados</p>
           )}
           {groups.map(({ muscle, items }) => (
             <div key={muscle}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 px-1.5 pt-2 pb-1 sticky top-0 bg-gray-800 z-10">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-1.5 pt-2 pb-1 sticky top-0 bg-white z-10">
                 {muscle}
               </p>
               {items.map((ex) => (
@@ -613,7 +605,7 @@ function ExercisePicker({ exercises, onPick }: { exercises: Exercise[]; onPick: 
                   tabIndex={0}
                   onClick={() => onPick(ex)}
                   onKeyDown={(e) => e.key === 'Enter' && onPick(ex)}
-                  className="w-full flex items-center gap-2 hover:bg-gray-600 active:bg-indigo-900/50 rounded-lg p-1.5 mb-0.5 cursor-pointer"
+                  className="w-full flex items-center gap-2 hover:bg-slate-50 active:bg-indigo-50 rounded-lg p-1.5 mb-0.5 cursor-pointer"
                 >
                   {ex.photo_ref ? (
                     <button
@@ -624,11 +616,11 @@ function ExercisePicker({ exercises, onPick }: { exercises: Exercise[]; onPick: 
                       <img src={`/${ex.photo_ref}`} className="w-10 h-10 object-cover" alt="" />
                     </button>
                   ) : (
-                    <div className="w-10 h-10 bg-gray-600 rounded shrink-0 flex items-center justify-center text-base">🏋️</div>
+                    <div className="w-10 h-10 bg-gray-100 rounded shrink-0 flex items-center justify-center text-base">🏋️</div>
                   )}
                   <div className="min-w-0">
-                    <p className="text-white text-xs font-medium leading-tight truncate">{ex.name}</p>
-                    <p className="text-gray-400 text-xs">{ex.primary_muscle} · +{ex.weight_increment_kg} kg</p>
+                    <p className="text-gray-900 text-xs font-medium leading-tight truncate">{ex.name}</p>
+                    <p className="text-gray-500 text-xs">{ex.primary_muscle} · +{ex.weight_increment_kg} kg</p>
                   </div>
                 </div>
               ))}
@@ -639,7 +631,7 @@ function ExercisePicker({ exercises, onPick }: { exercises: Exercise[]; onPick: 
 
       {lightboxSrc && (
         <div
-          className="fixed inset-0 bg-black/92 z-[60] flex flex-col items-center justify-center p-4"
+          className="fixed inset-0 bg-black/90 z-[60] flex flex-col items-center justify-center p-4"
           onClick={() => setLightboxSrc(null)}
         >
           <img src={lightboxSrc} className="max-w-full max-h-[80vh] object-contain rounded-xl" alt="" />

@@ -2,11 +2,11 @@
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
-    @apply bg-gray-950 text-gray-100 antialiased;
+    @apply bg-slate-50 text-gray-900 antialiased;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);

@@ -43,7 +43,6 @@ export default function AdminRutinas() {
 
   return (
     <div className="flex gap-6 h-full">
-      {/* Sidebar */}
       <RoutineSidebar
         routines={routines ?? []}
         selectedId={selectedId}
@@ -52,12 +51,11 @@ export default function AdminRutinas() {
         onDelete={deleteRoutine}
       />
 
-      {/* Editor */}
       <div className="flex-1 overflow-auto min-w-0">
         {selectedRoutine ? (
           <RoutineEditor key={selectedRoutine.id} routine={selectedRoutine} />
         ) : (
-          <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
+          <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
             ← Selecciona o crea una rutina
           </div>
         )}
@@ -95,8 +93,8 @@ function RoutineSidebar({
   return (
     <div className="w-60 shrink-0 space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-white font-semibold text-sm">Rutinas</h2>
-        <button onClick={() => setShowNew(true)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">
+        <h2 className="text-gray-900 font-semibold text-sm">Rutinas</h2>
+        <button onClick={() => setShowNew(true)} className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
           + Nueva
         </button>
       </div>
@@ -108,26 +106,26 @@ function RoutineSidebar({
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Nombre..."
-            className="flex-1 bg-gray-800 border border-indigo-500 rounded-lg px-2.5 py-1.5 text-white text-sm focus:outline-none"
+            className="flex-1 bg-white border border-indigo-500 rounded-lg px-2.5 py-1.5 text-gray-900 text-sm focus:outline-none"
           />
-          <button type="submit" className="text-indigo-400 px-2 text-sm font-semibold">✓</button>
-          <button type="button" onClick={() => setShowNew(false)} className="text-gray-500 px-1 text-sm">✕</button>
+          <button type="submit" className="text-indigo-600 px-2 text-sm font-semibold">✓</button>
+          <button type="button" onClick={() => setShowNew(false)} className="text-gray-400 px-1 text-sm">✕</button>
         </form>
       )}
 
       <div className="space-y-0.5">
         {routines.length === 0 && !showNew && (
-          <p className="text-gray-600 text-xs text-center py-6">Sin rutinas aún</p>
+          <p className="text-gray-400 text-xs text-center py-6">Sin rutinas aún</p>
         )}
         {routines.map((r) => (
           <div
             key={r.id}
             className={`flex items-center gap-1 rounded-lg px-2.5 py-2 cursor-pointer group transition-colors ${
-              selectedId === r.id ? 'bg-indigo-600' : 'hover:bg-gray-800'
+              selectedId === r.id ? 'bg-indigo-600' : 'hover:bg-gray-100'
             }`}
             onClick={() => onSelect(r.id)}
           >
-            <span className={`flex-1 text-sm truncate ${selectedId === r.id ? 'text-white font-medium' : 'text-gray-300'}`}>
+            <span className={`flex-1 text-sm truncate ${selectedId === r.id ? 'text-white font-medium' : 'text-gray-700'}`}>
               {r.name}
             </span>
             <span className="opacity-0 group-hover:opacity-100 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -176,7 +174,7 @@ function RoutineEditor({ routine }: { routine: Routine }) {
 
   return (
     <div className="max-w-4xl">
-      <h2 className="text-white text-xl font-bold mb-5">{routine.name}</h2>
+      <h2 className="text-gray-900 text-xl font-bold mb-5">{routine.name}</h2>
 
       <div className="space-y-5">
         {days?.map((day) => (
@@ -192,17 +190,17 @@ function RoutineEditor({ routine }: { routine: Routine }) {
               value={newDayName}
               onChange={(e) => setNewDayName(e.target.value)}
               placeholder="Ej: Día A – Empuje"
-              className="bg-gray-800 border border-indigo-500 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none w-72"
+              className="bg-white border border-indigo-500 rounded-lg px-3 py-1.5 text-gray-900 text-sm focus:outline-none w-72"
             />
             <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-3 py-1.5 rounded-lg">
               Crear día
             </button>
-            <button type="button" onClick={() => setShowNewDay(false)} className="text-gray-500 hover:text-gray-300 text-sm px-2">
+            <button type="button" onClick={() => setShowNewDay(false)} className="text-gray-400 hover:text-gray-600 text-sm px-2">
               Cancelar
             </button>
           </form>
         ) : (
-          <button onClick={() => setShowNewDay(true)} className="text-indigo-400 hover:text-indigo-300 text-sm transition-colors">
+          <button onClick={() => setShowNewDay(true)} className="text-indigo-600 hover:text-indigo-500 text-sm transition-colors">
             + Añadir día
           </button>
         )}
@@ -279,7 +277,6 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
     await db.outbox.add({ table: 'routine_day_exercises', record_id: other.id, op: 'upsert', payload: { ...other, position: rde.position, updated_at: now }, ts: now })
   }
 
-  // Exercises grouped by muscle for the <select>
   const exByMuscle = exercises
     ? exercises.reduce<Record<string, Exercise[]>>((acc, ex) => {
         const m = ex.primary_muscle ?? 'otros'
@@ -289,7 +286,7 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
     : {}
 
   return (
-    <div className="bg-gray-900 rounded-xl p-4">
+    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         {editingName ? (
@@ -299,17 +296,17 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') saveDayName(); if (e.key === 'Escape') setEditingName(false) }}
-              className="bg-gray-800 border border-indigo-500 rounded-lg px-2.5 py-1 text-white text-sm focus:outline-none"
+              className="bg-white border border-indigo-500 rounded-lg px-2.5 py-1 text-gray-900 text-sm focus:outline-none"
             />
-            <button onClick={saveDayName} className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold">✓</button>
-            <button onClick={() => { setEditingName(false); setNameInput(day.name) }} className="text-gray-500 text-sm">✕</button>
+            <button onClick={saveDayName} className="text-indigo-600 hover:text-indigo-500 text-sm font-semibold">✓</button>
+            <button onClick={() => { setEditingName(false); setNameInput(day.name) }} className="text-gray-400 text-sm">✕</button>
           </>
         ) : (
           <>
-            <h3 className="text-white font-semibold">{day.name}</h3>
+            <h3 className="text-gray-900 font-semibold">{day.name}</h3>
             <button
               onClick={() => { setEditingName(true); setNameInput(day.name) }}
-              className="text-gray-600 hover:text-indigo-400 transition-colors"
+              className="text-gray-300 hover:text-indigo-600 transition-colors"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -324,7 +321,7 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
       {rdes && rdes.length > 0 && (
         <table className="w-full text-sm mb-2">
           <thead>
-            <tr className="text-gray-500 text-xs border-b border-gray-800">
+            <tr className="text-gray-400 text-xs border-b border-gray-100">
               <th className="text-left py-1.5 pr-4 font-medium">Ejercicio</th>
               <th className="text-center py-1.5 px-2 font-medium w-16">Series</th>
               <th className="text-center py-1.5 px-2 font-medium w-16">Rep.min</th>
@@ -354,11 +351,11 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
 
       {/* Add exercise form */}
       {showAdd ? (
-        <form onSubmit={addExercise} className="flex gap-2 flex-wrap items-center mt-2 p-2.5 bg-gray-800/60 rounded-lg">
+        <form onSubmit={addExercise} className="flex gap-2 flex-wrap items-center mt-2 p-2.5 bg-slate-50 rounded-lg border border-gray-100">
           <select
             value={addExId}
             onChange={(e) => setAddExId(e.target.value)}
-            className="flex-1 min-w-[200px] bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-white text-sm focus:outline-none focus:border-indigo-500"
+            className="flex-1 min-w-[200px] bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-gray-900 text-sm focus:outline-none focus:border-indigo-500"
           >
             <option value="">— Seleccionar ejercicio —</option>
             {Object.entries(exByMuscle)
@@ -374,33 +371,33 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
 
           <div className="flex items-center gap-1">
             <input type="number" inputMode="numeric" value={addSets} onChange={(e) => setAddSets(+e.target.value)} min={1} max={10}
-              className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-1.5 text-white text-xs text-center focus:outline-none focus:border-indigo-500" />
-            <span className="text-gray-500 text-xs">ser</span>
+              className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+            <span className="text-gray-400 text-xs">ser</span>
           </div>
           <div className="flex items-center gap-1">
             <input type="number" inputMode="numeric" value={addRepMin} onChange={(e) => setAddRepMin(+e.target.value)} min={1}
-              className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-1.5 text-white text-xs text-center focus:outline-none focus:border-indigo-500" />
-            <span className="text-gray-500 text-xs">–</span>
+              className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+            <span className="text-gray-400 text-xs">–</span>
             <input type="number" inputMode="numeric" value={addRepMax} onChange={(e) => setAddRepMax(+e.target.value)} min={1}
-              className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-1.5 text-white text-xs text-center focus:outline-none focus:border-indigo-500" />
-            <span className="text-gray-500 text-xs">rep</span>
+              className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+            <span className="text-gray-400 text-xs">rep</span>
           </div>
           <div className="flex items-center gap-1">
             <input type="number" inputMode="decimal" value={addWeight} onChange={(e) => setAddWeight(e.target.value)} min={0} step={0.5} placeholder="—"
-              className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-1.5 text-white text-xs text-center focus:outline-none focus:border-indigo-500" />
-            <span className="text-gray-500 text-xs">kg</span>
+              className="w-16 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+            <span className="text-gray-400 text-xs">kg</span>
           </div>
 
           <button type="submit" disabled={!addExId}
             className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm px-3 py-1.5 rounded-lg transition-colors">
             Añadir
           </button>
-          <button type="button" onClick={() => setShowAdd(false)} className="text-gray-500 hover:text-gray-300 text-sm px-2">
+          <button type="button" onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600 text-sm px-2">
             Cancelar
           </button>
         </form>
       ) : (
-        <button onClick={() => setShowAdd(true)} className="text-indigo-400 hover:text-indigo-300 text-xs mt-1 transition-colors">
+        <button onClick={() => setShowAdd(true)} className="text-indigo-600 hover:text-indigo-500 text-xs mt-1 transition-colors">
           + Ejercicio
         </button>
       )}
@@ -440,28 +437,28 @@ function ExerciseRow({
 
   if (editing) {
     return (
-      <tr className="border-b border-gray-800/50 bg-gray-800/30">
-        <td className="py-1.5 pr-4 text-white text-sm">{ex.name}</td>
+      <tr className="border-b border-gray-100 bg-indigo-50">
+        <td className="py-1.5 pr-4 text-gray-900 text-sm">{ex.name}</td>
         <td className="px-2 py-1.5 text-center">
           <input type="number" value={editSets} onChange={(e) => setEditSets(+e.target.value)} min={1} max={10}
-            className="w-12 bg-gray-700 border border-indigo-500 rounded px-1 py-0.5 text-white text-xs text-center focus:outline-none" />
+            className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
         </td>
         <td className="px-2 py-1.5 text-center">
           <input type="number" value={editRepMin} onChange={(e) => setEditRepMin(+e.target.value)} min={1}
-            className="w-12 bg-gray-700 border border-indigo-500 rounded px-1 py-0.5 text-white text-xs text-center focus:outline-none" />
+            className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
         </td>
         <td className="px-2 py-1.5 text-center">
           <input type="number" value={editRepMax} onChange={(e) => setEditRepMax(+e.target.value)} min={1}
-            className="w-12 bg-gray-700 border border-indigo-500 rounded px-1 py-0.5 text-white text-xs text-center focus:outline-none" />
+            className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
         </td>
         <td className="px-2 py-1.5 text-center">
           <input type="number" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} min={0} step={0.5} placeholder="—"
-            className="w-16 bg-gray-700 border border-indigo-500 rounded px-1 py-0.5 text-white text-xs text-center focus:outline-none" />
+            className="w-16 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
         </td>
         <td className="pl-2 py-1.5">
           <div className="flex items-center gap-0.5">
-            <button onClick={save} className="text-indigo-400 hover:text-indigo-300 px-1.5 py-0.5 text-sm font-semibold">✓</button>
-            <button onClick={() => setEditing(false)} className="text-gray-500 hover:text-gray-300 px-1.5 py-0.5 text-sm">✕</button>
+            <button onClick={save} className="text-indigo-600 hover:text-indigo-500 px-1.5 py-0.5 text-sm font-semibold">✓</button>
+            <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600 px-1.5 py-0.5 text-sm">✕</button>
           </div>
         </td>
       </tr>
@@ -470,26 +467,26 @@ function ExerciseRow({
 
   return (
     <tr
-      className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer group"
+      className="border-b border-gray-100 hover:bg-slate-50 cursor-pointer group"
       onClick={() => setEditing(true)}
     >
-      <td className="py-2 pr-4 text-white text-sm">{ex.name}</td>
-      <td className="px-2 py-2 text-center text-gray-300 text-sm">{rde.target_sets}</td>
-      <td className="px-2 py-2 text-center text-gray-300 text-sm">{rde.rep_min}</td>
-      <td className="px-2 py-2 text-center text-gray-300 text-sm">{rde.rep_max}</td>
+      <td className="py-2 pr-4 text-gray-900 text-sm">{ex.name}</td>
+      <td className="px-2 py-2 text-center text-gray-700 text-sm">{rde.target_sets}</td>
+      <td className="px-2 py-2 text-center text-gray-700 text-sm">{rde.rep_min}</td>
+      <td className="px-2 py-2 text-center text-gray-700 text-sm">{rde.rep_max}</td>
       <td className="px-2 py-2 text-center text-sm">
         {rde.target_weight_kg != null
-          ? <span className="text-emerald-500">{rde.target_weight_kg} kg</span>
-          : <span className="text-gray-600">—</span>}
+          ? <span className="text-emerald-600">{rde.target_weight_kg} kg</span>
+          : <span className="text-gray-400">—</span>}
       </td>
       <td className="pl-2 py-2">
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={(e) => { e.stopPropagation(); onMoveUp?.() }} disabled={!onMoveUp}
-            className="text-gray-500 hover:text-white disabled:opacity-20 px-1 text-xs transition-colors">▲</button>
+            className="text-gray-400 hover:text-gray-700 disabled:opacity-20 px-1 text-xs transition-colors">▲</button>
           <button onClick={(e) => { e.stopPropagation(); onMoveDown?.() }} disabled={!onMoveDown}
-            className="text-gray-500 hover:text-white disabled:opacity-20 px-1 text-xs transition-colors">▼</button>
+            className="text-gray-400 hover:text-gray-700 disabled:opacity-20 px-1 text-xs transition-colors">▼</button>
           <button onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="text-gray-600 hover:text-red-400 px-1 text-xs ml-0.5 transition-colors">✕</button>
+            className="text-gray-400 hover:text-red-500 px-1 text-xs ml-0.5 transition-colors">✕</button>
         </div>
       </td>
     </tr>

@@ -80,14 +80,14 @@ export default function Hoy() {
 
   return (
     <div className="flex flex-col h-full px-4 pt-6 pb-4 space-y-6">
-      <h2 className="text-2xl font-bold text-white">Hoy</h2>
+      <h2 className="text-2xl font-bold text-gray-900">Hoy</h2>
 
       {programExpired && (
-        <div className="bg-amber-900/40 border border-amber-700 rounded-2xl px-4 py-3 flex items-start gap-3">
-          <span className="text-amber-400 text-lg mt-0.5">⏰</span>
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+          <span className="text-amber-500 text-lg mt-0.5">⏰</span>
           <div>
-            <p className="text-amber-300 text-sm font-semibold">Programa completado</p>
-            <p className="text-amber-400/80 text-xs mt-0.5">
+            <p className="text-amber-700 text-sm font-semibold">Programa completado</p>
+            <p className="text-amber-600 text-xs mt-0.5">
               {activeRoutine?.name} finalizó el {programEndDate}. ¿Empezar un nuevo programa?
             </p>
           </div>
@@ -101,17 +101,17 @@ export default function Hoy() {
       ) : (
         <>
           {prevDay && (
-            <p className="text-gray-500 text-sm">
-              Última sesión: <span className="text-gray-400">{prevDay.name}</span>
+            <p className="text-gray-400 text-sm">
+              Última sesión: <span className="text-gray-600">{prevDay.name}</span>
             </p>
           )}
 
-          <div className="bg-gray-800 rounded-2xl p-5 space-y-4">
+          <div className="bg-white rounded-2xl p-5 space-y-4 shadow-sm border border-gray-100">
             <div>
-              <p className="text-xs text-indigo-400 font-semibold uppercase tracking-wide">
+              <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide">
                 {activeRoutine.name}
               </p>
-              <h3 className="text-xl font-bold text-white mt-1">{nextDay?.name}</h3>
+              <h3 className="text-xl font-bold text-gray-900 mt-1">{nextDay?.name}</h3>
             </div>
 
             <DayExerciseList dayId={nextDay?.id} />
@@ -148,30 +148,30 @@ function DayExerciseList({ dayId }: { dayId: string | undefined }) {
       {rdes.map((rde) => {
         const ex = exMap[rde.exercise_id]
         return ex ? (
-          <li key={rde.id} className="text-sm text-gray-300 flex justify-between">
+          <li key={rde.id} className="text-sm text-gray-700 flex justify-between">
             <span>{ex.name}</span>
-            <span className="text-gray-500">
+            <span className="text-gray-400">
               {rde.target_sets}×{rde.rep_min}–{rde.rep_max}
             </span>
           </li>
         ) : null
       })}
       {rdes.length === 0 && (
-        <li className="text-sm text-gray-500">Sin ejercicios en este día</li>
+        <li className="text-sm text-gray-400">Sin ejercicios en este día</li>
       )}
     </ul>
   )
 }
 
 function LoadingCard() {
-  return <div className="bg-gray-800 rounded-2xl p-5 animate-pulse h-40" />
+  return <div className="bg-gray-100 rounded-2xl p-5 animate-pulse h-40" />
 }
 
 function EmptyState() {
   const navigate = useNavigate()
   return (
     <div className="text-center space-y-4 mt-8">
-      <p className="text-gray-400">No tienes ninguna rutina activa.</p>
+      <p className="text-gray-500">No tienes ninguna rutina activa.</p>
       <button
         onClick={() => navigate('/rutinas')}
         className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-3 rounded-xl min-h-[44px]"

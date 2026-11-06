@@ -25,18 +25,18 @@ export default function Progreso() {
   return (
     <div className="flex flex-col h-full">
       <header className="px-4 pt-4 pb-3">
-        <h2 className="text-xl font-bold text-white">Progreso</h2>
+        <h2 className="text-xl font-bold text-gray-900">Progreso</h2>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
         {sessions === undefined && (
-          <div className="bg-gray-800 rounded-2xl p-5 animate-pulse h-24" />
+          <div className="bg-gray-100 rounded-2xl p-5 animate-pulse h-24" />
         )}
         {sessions?.length === 0 && (
           <div className="text-center mt-16 space-y-2">
             <p className="text-4xl">🏋️</p>
-            <p className="text-gray-400 text-sm">Aún no hay sesiones registradas.</p>
-            <p className="text-gray-600 text-xs">Completa tu primera sesión para ver el historial.</p>
+            <p className="text-gray-500 text-sm">Aún no hay sesiones registradas.</p>
+            <p className="text-gray-400 text-xs">Completa tu primera sesión para ver el historial.</p>
           </div>
         )}
         {sessions?.map((s) => (
@@ -93,7 +93,7 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
     : null
 
   return (
-    <div className="bg-gray-800 rounded-2xl overflow-hidden">
+    <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
       <div className="flex items-start">
         <button
           onClick={() => setExpanded((v) => !v)}
@@ -101,21 +101,21 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-white font-semibold leading-tight">
+              <p className="text-gray-900 font-semibold leading-tight">
                 {dayName ?? 'Sesión libre'}
               </p>
-              <p className="text-gray-400 text-xs mt-0.5 capitalize">
+              <p className="text-gray-500 text-xs mt-0.5 capitalize">
                 {dateStr} · {timeStr}
               </p>
             </div>
             <div className="shrink-0 text-right">
               {durationMin != null && (
-                <p className="text-gray-500 text-xs">{durationMin} min</p>
+                <p className="text-gray-400 text-xs">{durationMin} min</p>
               )}
               {sessionExercises !== undefined && (
-                <p className="text-gray-600 text-xs">{sessionExercises.length} ejercicios</p>
+                <p className="text-gray-400 text-xs">{sessionExercises.length} ejercicios</p>
               )}
-              <span className="text-gray-600 text-xs block mt-1">{expanded ? '▲' : '▼'}</span>
+              <span className="text-gray-400 text-xs block mt-1">{expanded ? '▲' : '▼'}</span>
             </div>
           </div>
         </button>
@@ -125,18 +125,18 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-700 px-4 pt-3 pb-4 space-y-4">
+        <div className="border-t border-gray-100 px-4 pt-3 pb-4 space-y-4">
           {!sessionExercises ? (
-            <p className="text-gray-500 text-xs">Cargando...</p>
+            <p className="text-gray-400 text-xs">Cargando...</p>
           ) : sessionExercises.length === 0 ? (
-            <p className="text-gray-500 text-xs">Sin ejercicios registrados</p>
+            <p className="text-gray-400 text-xs">Sin ejercicios registrados</p>
           ) : (
             sessionExercises.map((se: SessionExercise) => (
               <ExerciseSummary key={se.id} sessionExercise={se} />
             ))
           )}
           {session.notes && (
-            <p className="text-gray-400 text-xs italic border-t border-gray-700 pt-3">
+            <p className="text-gray-500 text-xs italic border-t border-gray-100 pt-3">
               {session.notes}
             </p>
           )}
@@ -173,8 +173,8 @@ function ExerciseSummary({ sessionExercise: se }: { sessionExercise: SessionExer
             className="w-7 h-7 object-cover rounded shrink-0"
           />
         )}
-        <p className="text-white text-sm font-medium leading-tight">{exercise.name}</p>
-        <span className="ml-auto text-gray-500 text-xs shrink-0">
+        <p className="text-gray-900 text-sm font-medium leading-tight">{exercise.name}</p>
+        <span className="ml-auto text-gray-400 text-xs shrink-0">
           {completedSets.length}/{totalSets.length} series
         </span>
       </div>
@@ -186,7 +186,7 @@ function ExerciseSummary({ sessionExercise: se }: { sessionExercise: SessionExer
       </div>
 
       {se.notes && (
-        <p className="text-gray-500 text-xs mt-1.5 italic">{se.notes}</p>
+        <p className="text-gray-400 text-xs mt-1.5 italic">{se.notes}</p>
       )}
     </div>
   )
@@ -197,7 +197,7 @@ function SetChip({ set: s }: { set: SetRecord }) {
 
   if (!hasData && !s.completed) {
     return (
-      <span className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-600 line-through">
+      <span className="text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-400 line-through">
         serie {s.set_index + 1}
       </span>
     )
@@ -216,9 +216,9 @@ function SetChip({ set: s }: { set: SetRecord }) {
       className={`text-xs px-2.5 py-1 rounded-lg font-mono ${
         s.completed
           ? s.is_warmup
-            ? 'bg-gray-700 text-gray-400'
-            : 'bg-green-900/50 text-green-300'
-          : 'bg-gray-700 text-gray-500 line-through'
+            ? 'bg-gray-100 text-gray-500'
+            : 'bg-green-50 text-green-700'
+          : 'bg-gray-100 text-gray-400 line-through'
       }`}
     >
       {label || `serie ${s.set_index + 1}`}

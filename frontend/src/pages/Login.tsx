@@ -41,17 +41,17 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
+    <div className="min-h-screen flex items-center justify-center px-6 bg-slate-50">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-white">GymLog</h1>
-          <p className="mt-2 text-gray-400 text-sm">Tu registro de entrenamiento</p>
+          <h1 className="text-3xl font-bold text-gray-900">GymLog</h1>
+          <p className="mt-2 text-gray-500 text-sm">Tu registro de entrenamiento</p>
         </div>
 
         {step === 'email' ? (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm text-gray-400 mb-1">
+              <label htmlFor="email" className="block text-sm text-gray-600 mb-1">
                 Correo electrónico
               </label>
               <input
@@ -61,10 +61,10 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="tu@correo.com"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-base"
+                className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-500 text-base shadow-sm"
               />
             </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading}
@@ -76,9 +76,9 @@ export default function Login() {
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div>
-              <p className="text-gray-400 text-sm mb-4">
+              <p className="text-gray-500 text-sm mb-4">
                 Ingresá el código de 6 dígitos enviado a{' '}
-                <span className="text-white font-mono">{email}</span>
+                <span className="text-gray-900 font-mono">{email}</span>
               </p>
               <input
                 id="otp"
@@ -91,10 +91,10 @@ export default function Login() {
                 required
                 placeholder="123456"
                 autoFocus
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-2xl tracking-widest text-center"
+                className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-500 text-2xl tracking-widest text-center shadow-sm"
               />
             </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading || otp.length < 6}
@@ -105,7 +105,7 @@ export default function Login() {
             <button
               type="button"
               onClick={() => { setStep('email'); setError(null); setOtp('') }}
-              className="w-full text-gray-500 text-sm py-2"
+              className="w-full text-gray-400 text-sm py-2"
             >
               Cambiar email
             </button>

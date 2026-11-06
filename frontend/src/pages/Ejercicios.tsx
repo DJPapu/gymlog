@@ -40,9 +40,7 @@ export default function Ejercicios() {
     try {
       const id = crypto.randomUUID()
       const now = new Date().toISOString()
-      // Escribir en Dexie primero (offline-first)
       await db.exercises.add({ ...form, id, created_by: null, updated_at: now, deleted_at: null })
-      // Intentar sincronizar (si hay conexión)
       try {
         const saved = await apiFetch<Exercise>('/exercises/', {
           method: 'POST',
@@ -50,7 +48,6 @@ export default function Ejercicios() {
         })
         await db.exercises.update(id, { updated_at: saved.updated_at })
       } catch {
-        // Sin conexión — quedará en Dexie y se sincronizará después
         await db.outbox.add({ table: 'exercises', record_id: id, op: 'upsert', payload: { ...form, id }, ts: now })
       }
       setForm({ ...BLANK })
@@ -65,7 +62,7 @@ export default function Ejercicios() {
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-4 pt-4 pb-3">
-        <h2 className="text-xl font-bold text-white">Ejercicios</h2>
+        <h2 className="text-xl font-bold text-gray-900">Ejercicios</h2>
         <button
           onClick={() => setShowForm(true)}
           className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-xl min-h-[44px]"
@@ -74,17 +71,16 @@ export default function Ejercicios() {
         </button>
       </header>
 
-      {/* Lista agrupada por músculo */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
-        {exercises === undefined && <p className="text-gray-500 text-sm mt-4">Cargando...</p>}
+        {exercises === undefined && <p className="text-gray-400 text-sm mt-4">Cargando...</p>}
         {exercises?.length === 0 && (
-          <p className="text-gray-500 text-sm text-center mt-8">
+          <p className="text-gray-400 text-sm text-center mt-8">
             No hay ejercicios. ¡Crea el primero!
           </p>
         )}
         {exercises !== undefined && exercises.length > 0 && groupByMuscle(exercises).map(({ muscle, items }) => (
           <div key={muscle}>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 px-1 pt-5 pb-2 first:pt-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1 pt-5 pb-2 first:pt-3">
               {muscle}
             </h3>
             <div className="space-y-2">
@@ -94,14 +90,13 @@ export default function Ejercicios() {
         ))}
       </div>
 
-      {/* Modal de creación */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/70 flex items-end z-50" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowForm(false)}>
           <div
-            className="bg-gray-900 rounded-t-2xl w-full max-h-[85vh] overflow-y-auto p-5 space-y-4"
+            className="bg-white rounded-t-2xl w-full max-h-[85vh] overflow-y-auto p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold text-white">Nuevo ejercicio</h3>
+            <h3 className="text-lg font-bold text-gray-900">Nuevo ejercicio</h3>
             <form onSubmit={handleSave} className="space-y-3">
               <Field label="Nombre">
                 <input
@@ -152,12 +147,12 @@ export default function Ejercicios() {
                   />
                 </Field>
               </div>
-              <label className="flex items-center gap-3 text-sm text-gray-300">
+              <label className="flex items-center gap-3 text-sm text-gray-700">
                 <input
                   type="checkbox"
                   checked={form.unilateral}
                   onChange={(e) => set('unilateral', e.target.checked)}
-                  className="w-5 h-5 rounded accent-indigo-500"
+                  className="w-5 h-5 rounded accent-indigo-600"
                 />
                 Unilateral (un lado a la vez)
               </label>
@@ -170,7 +165,7 @@ export default function Ejercicios() {
                   placeholder="Asiento a la altura del pecho..."
                 />
               </Field>
-              {error && <p className="text-red-400 text-sm">{error}</p>}
+              {error && <p className="text-red-500 text-sm">{error}</p>}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowForm(false)} className={`${btnSecondary} flex-1`}>
                   Cancelar
@@ -194,31 +189,31 @@ function ExerciseCard({ exercise: ex }: { exercise: Exercise }) {
 
   return (
     <>
-      <div className="bg-gray-800 rounded-xl overflow-hidden flex items-stretch">
+      <div className="bg-white rounded-xl overflow-hidden flex items-stretch shadow-sm border border-gray-100">
         {ex.photo_ref ? (
           <button onClick={() => setLightbox(true)} className="shrink-0 w-20 h-20 block">
             <img src={`/${ex.photo_ref}`} alt={ex.name} className="w-20 h-20 object-cover" />
           </button>
         ) : (
-          <div className="w-20 h-20 bg-gray-700 shrink-0 flex items-center justify-center text-2xl text-gray-600">🏋️</div>
+          <div className="w-20 h-20 bg-gray-50 shrink-0 flex items-center justify-center text-2xl text-gray-300">🏋️</div>
         )}
         <div className="px-3 py-3 flex flex-col justify-center min-w-0 flex-1">
-          <p className="text-white font-medium text-sm leading-tight">{ex.name}</p>
-          <p className="text-gray-400 text-xs mt-1">
+          <p className="text-gray-900 font-medium text-sm leading-tight">{ex.name}</p>
+          <p className="text-gray-500 text-xs mt-1">
             {ex.primary_muscle} · {ex.default_rep_range} reps · +{ex.weight_increment_kg} kg
           </p>
           {ex.setup_tips && (
             <button type="button" onClick={() => setTipsExpanded((v) => !v)} className="mt-0.5 text-left">
-              <p className={`text-gray-500 text-xs leading-relaxed ${tipsExpanded ? '' : 'line-clamp-1'}`}>
+              <p className={`text-gray-400 text-xs leading-relaxed ${tipsExpanded ? '' : 'line-clamp-1'}`}>
                 {ex.setup_tips}
               </p>
-              {!tipsExpanded && <span className="text-indigo-400/70 text-[10px]">ver más</span>}
+              {!tipsExpanded && <span className="text-indigo-500 text-[10px]">ver más</span>}
             </button>
           )}
         </div>
         <button
           onClick={() => setShowAdd(true)}
-          className="px-4 flex items-center justify-center text-indigo-400 hover:text-indigo-300 text-2xl font-light shrink-0"
+          className="px-4 flex items-center justify-center text-indigo-600 hover:text-indigo-500 text-2xl font-light shrink-0"
           aria-label="Añadir a rutina"
         >
           +
@@ -227,7 +222,7 @@ function ExerciseCard({ exercise: ex }: { exercise: Exercise }) {
 
       {lightbox && ex.photo_ref && (
         <div
-          className="fixed inset-0 bg-black/92 z-50 flex flex-col items-center justify-center p-4"
+          className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4"
           onClick={() => setLightbox(false)}
         >
           <img
@@ -237,7 +232,7 @@ function ExerciseCard({ exercise: ex }: { exercise: Exercise }) {
           />
           <p className="mt-4 text-white text-sm font-medium text-center">{ex.name}</p>
           {ex.setup_tips && (
-            <p className="mt-2 text-gray-400 text-xs text-center max-w-xs leading-relaxed">{ex.setup_tips}</p>
+            <p className="mt-2 text-gray-300 text-xs text-center max-w-xs leading-relaxed">{ex.setup_tips}</p>
           )}
           <button
             className="absolute top-5 right-5 text-white/70 hover:text-white text-3xl leading-none min-h-[44px] min-w-[44px]"
@@ -308,28 +303,27 @@ function AddToRoutineSheet({ exercise, onClose }: { exercise: Exercise; onClose:
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-end z-50" onClick={onClose}>
-      <div className="bg-gray-900 rounded-t-2xl w-full max-h-[75vh] overflow-y-auto p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={onClose}>
+      <div className="bg-white rounded-t-2xl w-full max-h-[75vh] overflow-y-auto p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-white font-bold text-base">Añadir a rutina</h3>
+          <h3 className="text-gray-900 font-bold text-base">Añadir a rutina</h3>
           <button onClick={onClose} className="text-gray-400 text-xl min-h-[44px] px-2">✕</button>
         </div>
 
-        {/* Chip del ejercicio seleccionado */}
-        <div className="flex items-center gap-3 bg-gray-800 rounded-xl p-3">
+        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-gray-100">
           {exercise.photo_ref && (
             <img src={`/${exercise.photo_ref}`} className="w-12 h-12 object-cover rounded-lg shrink-0" alt="" />
           )}
           <div>
-            <p className="text-white text-sm font-medium">{exercise.name}</p>
-            <p className="text-gray-400 text-xs">{exercise.primary_muscle}</p>
+            <p className="text-gray-900 text-sm font-medium">{exercise.name}</p>
+            <p className="text-gray-500 text-xs">{exercise.primary_muscle}</p>
           </div>
         </div>
 
         {mode === 'pick' ? (
           <>
             {routines?.length === 0 ? (
-              <p className="text-gray-500 text-sm text-center py-2">No tienes rutinas. Crea una nueva abajo.</p>
+              <p className="text-gray-400 text-sm text-center py-2">No tienes rutinas. Crea una nueva abajo.</p>
             ) : (
               <div className="space-y-3">
                 {routines?.map((r: Routine) => {
@@ -337,12 +331,12 @@ function AddToRoutineSheet({ exercise, onClose }: { exercise: Exercise; onClose:
                   return (
                     <div key={r.id}>
                       <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-1.5">{r.name}</p>
-                      {days.length === 0 && <p className="text-gray-600 text-xs px-1">Sin días</p>}
+                      {days.length === 0 && <p className="text-gray-400 text-xs px-1">Sin días</p>}
                       {days.map((day: RoutineDay) => (
                         <button
                           key={day.id}
                           onClick={() => addToDay(day.id)}
-                          className="w-full text-left bg-gray-800 hover:bg-gray-700 active:bg-indigo-900/30 rounded-xl px-4 py-3 text-white text-sm mb-1 min-h-[44px]"
+                          className="w-full text-left bg-slate-50 hover:bg-slate-100 active:bg-indigo-50 rounded-xl px-4 py-3 text-gray-800 text-sm mb-1 min-h-[44px] border border-gray-100"
                         >
                           {day.name}
                         </button>
@@ -354,23 +348,23 @@ function AddToRoutineSheet({ exercise, onClose }: { exercise: Exercise; onClose:
             )}
             <button
               onClick={() => setMode('new')}
-              className="w-full border border-dashed border-gray-600 text-gray-400 rounded-xl py-3 text-sm hover:border-indigo-500 hover:text-indigo-400 min-h-[44px]"
+              className="w-full border border-dashed border-gray-300 text-gray-500 rounded-xl py-3 text-sm hover:border-indigo-500 hover:text-indigo-600 min-h-[44px]"
             >
               + Crear nueva rutina con este ejercicio
             </button>
           </>
         ) : (
           <div className="space-y-3">
-            <p className="text-gray-400 text-sm">Se creará la rutina con un "Día A" que incluye este ejercicio.</p>
+            <p className="text-gray-600 text-sm">Se creará la rutina con un "Día A" que incluye este ejercicio.</p>
             <input
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Nombre de la rutina..."
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-indigo-500"
             />
             <div className="flex gap-3">
-              <button onClick={() => setMode('pick')} className="flex-1 bg-gray-700 text-white py-3 rounded-xl text-sm min-h-[44px]">Volver</button>
+              <button onClick={() => setMode('pick')} className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl text-sm min-h-[44px]">Volver</button>
               <button
                 onClick={createRoutineWithExercise}
                 disabled={saving || !newName.trim()}
@@ -389,7 +383,7 @@ function AddToRoutineSheet({ exercise, onClose }: { exercise: Exercise; onClose:
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-gray-400">{label}</label>
+      <label className="text-xs text-gray-600">{label}</label>
       {children}
     </div>
   )
@@ -403,8 +397,6 @@ function Select({ value, onChange, options }: { value: string; onChange: (v: str
   )
 }
 
-const inputCls = 'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500'
+const inputCls = 'w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-indigo-500'
 const btnPrimary = 'bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors min-h-[44px] text-sm'
-const btnSecondary = 'bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-colors min-h-[44px] text-sm'
-
-
+const btnSecondary = 'bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors min-h-[44px] text-sm'

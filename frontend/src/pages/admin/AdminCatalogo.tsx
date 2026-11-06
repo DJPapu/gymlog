@@ -25,23 +25,23 @@ export default function AdminCatalogo() {
     <div>
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <h2 className="text-white font-bold text-lg">Catálogo de ejercicios</h2>
-          <span className="text-gray-500 text-sm">{exercises?.length ?? 0} ejercicios</span>
+          <h2 className="text-gray-900 font-bold text-lg">Catálogo de ejercicios</h2>
+          <span className="text-gray-400 text-sm">{exercises?.length ?? 0} ejercicios</span>
         </div>
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar..."
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-indigo-500 w-52"
+          className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-gray-900 text-sm focus:outline-none focus:border-indigo-500 w-52 shadow-sm"
         />
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-gray-500 text-xs border-b border-gray-700">
-              <th className="text-left py-2 pr-3 w-12 font-medium">Foto</th>
+            <tr className="text-gray-400 text-xs border-b border-gray-100">
+              <th className="text-left py-2 pr-3 pl-3 w-12 font-medium">Foto</th>
               <th className="text-left py-2 pr-3 font-medium">Nombre</th>
               <th className="text-left py-2 pr-3 w-36 font-medium">Músculo</th>
               <th className="text-left py-2 pr-3 w-28 font-medium">Equipo</th>
@@ -71,7 +71,7 @@ export default function AdminCatalogo() {
         </table>
 
         {filtered?.length === 0 && (
-          <p className="text-gray-600 text-sm text-center py-10">Sin resultados</p>
+          <p className="text-gray-400 text-sm text-center py-10">Sin resultados</p>
         )}
       </div>
     </div>
@@ -82,24 +82,24 @@ export default function AdminCatalogo() {
 
 function ExerciseDisplayRow({ ex, onEdit }: { ex: Exercise; onEdit: () => void }) {
   return (
-    <tr className="border-b border-gray-800/50 hover:bg-gray-800/20 group">
-      <td className="py-2 pr-3">
+    <tr className="border-b border-gray-100 hover:bg-slate-50 group">
+      <td className="py-2 pr-3 pl-3">
         {ex.photo_ref ? (
           <img src={`/${ex.photo_ref}`} className="w-10 h-10 object-cover rounded" alt="" />
         ) : (
-          <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-600">—</div>
+          <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-xs text-gray-400">—</div>
         )}
       </td>
-      <td className="py-2 pr-3 text-white">{ex.name}</td>
-      <td className="py-2 pr-3 text-gray-400 text-xs">{ex.primary_muscle}</td>
-      <td className="py-2 pr-3 text-gray-400 text-xs">{ex.equipment}</td>
-      <td className="py-2 pr-3 text-center text-gray-400 text-xs">{ex.weight_increment_kg} kg</td>
-      <td className="py-2 pr-3 text-center text-gray-400 text-xs">{ex.default_rep_range}</td>
-      <td className="py-2 pr-3 text-center text-gray-500 text-xs">{ex.unilateral ? '✓' : '—'}</td>
+      <td className="py-2 pr-3 text-gray-900 font-medium">{ex.name}</td>
+      <td className="py-2 pr-3 text-gray-500 text-xs">{ex.primary_muscle}</td>
+      <td className="py-2 pr-3 text-gray-500 text-xs">{ex.equipment}</td>
+      <td className="py-2 pr-3 text-center text-gray-500 text-xs">{ex.weight_increment_kg} kg</td>
+      <td className="py-2 pr-3 text-center text-gray-500 text-xs">{ex.default_rep_range}</td>
+      <td className="py-2 pr-3 text-center text-gray-400 text-xs">{ex.unilateral ? '✓' : '—'}</td>
       <td className="py-2">
         <button
           onClick={onEdit}
-          className="opacity-0 group-hover:opacity-100 text-indigo-400 hover:text-indigo-300 text-xs px-2 py-1 rounded transition-opacity"
+          className="opacity-0 group-hover:opacity-100 text-indigo-600 hover:text-indigo-500 text-xs px-2 py-1 rounded transition-opacity"
         >
           Editar
         </button>
@@ -148,18 +148,18 @@ function ExerciseEditRow({ ex, onDone }: { ex: Exercise; onDone: () => void }) {
     onDone()
   }
 
-  const inputCls = 'bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs w-full focus:outline-none focus:border-indigo-500'
+  const inputCls = 'bg-white border border-gray-300 rounded px-2 py-1 text-gray-900 text-xs w-full focus:outline-none focus:border-indigo-500'
   const selectCls = `${inputCls} cursor-pointer`
 
   return (
     <>
       {/* Main edit row */}
-      <tr className="border-b border-indigo-900/40 bg-indigo-950/20">
-        <td className="py-2 pr-3">
+      <tr className="border-b border-indigo-100 bg-indigo-50">
+        <td className="py-2 pr-3 pl-3">
           {ex.photo_ref ? (
             <img src={`/${ex.photo_ref}`} className="w-10 h-10 object-cover rounded" alt="" />
           ) : (
-            <div className="w-10 h-10 bg-gray-800 rounded" />
+            <div className="w-10 h-10 bg-gray-100 rounded" />
           )}
         </td>
         <td className="py-2 pr-3">
@@ -177,26 +177,26 @@ function ExerciseEditRow({ ex, onDone }: { ex: Exercise; onDone: () => void }) {
         </td>
         <td className="py-2 pr-3 text-center">
           <input type="number" value={increment} onChange={(e) => setIncrement(e.target.value)} step={0.5} min={0}
-            className="w-14 bg-gray-800 border border-gray-600 rounded px-1 py-1 text-white text-xs text-center focus:outline-none focus:border-indigo-500" />
+            className="w-14 bg-white border border-gray-300 rounded px-1 py-1 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
         </td>
         <td className="py-2 pr-3 text-center">
           <input value={repRange} onChange={(e) => setRepRange(e.target.value)} placeholder="8-12"
-            className="w-16 bg-gray-800 border border-gray-600 rounded px-1 py-1 text-white text-xs text-center focus:outline-none focus:border-indigo-500" />
+            className="w-16 bg-white border border-gray-300 rounded px-1 py-1 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
         </td>
         <td className="py-2 pr-3 text-center">
           <input type="checkbox" checked={unilateral} onChange={(e) => setUnilateral(e.target.checked)}
-            className="w-4 h-4 accent-indigo-500 cursor-pointer" />
+            className="w-4 h-4 accent-indigo-600 cursor-pointer" />
         </td>
         <td className="py-2">
           <div className="flex gap-0.5">
-            <button onClick={save} className="text-indigo-400 hover:text-indigo-300 text-xs px-1.5 py-1 font-semibold">✓</button>
-            <button onClick={onDone} className="text-gray-500 hover:text-gray-300 text-xs px-1.5 py-1">✕</button>
+            <button onClick={save} className="text-indigo-600 hover:text-indigo-500 text-xs px-1.5 py-1 font-semibold">✓</button>
+            <button onClick={onDone} className="text-gray-400 hover:text-gray-600 text-xs px-1.5 py-1">✕</button>
           </div>
         </td>
       </tr>
 
       {/* Extra fields row */}
-      <tr className="border-b border-indigo-900/40 bg-indigo-950/10">
+      <tr className="border-b border-indigo-100 bg-indigo-50/50">
         <td />
         <td colSpan={3} className="py-2.5 pr-4">
           <div className="space-y-2">
@@ -221,7 +221,7 @@ function ExerciseEditRow({ ex, onDone }: { ex: Exercise; onDone: () => void }) {
             <div>
               <label className="text-gray-500 text-xs block mb-0.5">Setup tips</label>
               <textarea value={setupTips} onChange={(e) => setSetupTips(e.target.value)} rows={2}
-                className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs w-full focus:outline-none focus:border-indigo-500 resize-none" />
+                className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-900 text-xs w-full focus:outline-none focus:border-indigo-500 resize-none" />
             </div>
           </div>
         </td>

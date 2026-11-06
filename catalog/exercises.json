@@ -362,5 +362,47 @@
     "default_rep_range": "6-10",
     "setup_tips": "Arrodillarse en la plataforma y agarrar la barra superior. Tirar hasta que el mentón supere la barra. A mayor contrapeso, más fácil.",
     "photo_ref": "photos/processed/fondos_asistidos_lifefitness.jpg"
+  },
+  {
+    "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b27",
+    "name": "Pullover en máquina",
+    "machine_name": null,
+    "equipment": "plate_loaded",
+    "primary_muscle": "dorsal",
+    "secondary_muscles": ["pectoral", "tríceps"],
+    "movement_pattern": "pull",
+    "unilateral": false,
+    "weight_increment_kg": 5,
+    "default_rep_range": "10-15",
+    "setup_tips": "Sentado con la espalda apoyada, agarrar los brazos articulados por encima de la cabeza. Bajar en arco hacia los muslos manteniendo los codos casi rectos.",
+    "photo_ref": "photos/processed/pullover_maquina.jpg"
+  },
+  {
+    "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b28",
+    "name": "Elevación frontal con cable",
+    "machine_name": null,
+    "equipment": "cable",
+    "primary_muscle": "deltoides anterior",
+    "secondary_muscles": ["deltoides lateral"],
+    "movement_pattern": "isolation",
+    "unilateral": true,
+    "weight_increment_kg": 2.5,
+    "default_rep_range": "12-15",
+    "setup_tips": "Polea baja, agarre con una mano. De pie de lado a la polea, levantar el brazo recto al frente hasta la altura del hombro. Bajar de forma controlada.",
+    "photo_ref": "photos/processed/elevacion_frontal_cable.jpg"
+  },
+  {
+    "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b29",
+    "name": "Extensión de tríceps con polea de pie",
+    "machine_name": null,
+    "equipment": "cable",
+    "primary_muscle": "tríceps",
+    "secondary_muscles": [],
+    "movement_pattern": "isolation",
+    "unilateral": false,
+    "weight_increment_kg": 2.5,
+    "default_rep_range": "10-15",
+    "setup_tips": "Polea alta con cuerda o barra. De pie, codos pegados al cuerpo, empujar hacia abajo hasta extensión completa. Codos fijos durante todo el movimiento.",
+    "photo_ref": "photos/processed/extension_triceps_cable_pie.jpg"
   }
 ]
