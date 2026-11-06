@@ -1,10 +1,11 @@
 import { supabase } from './supabase'
 
-const _envUrl = import.meta.env.VITE_API_URL as string | undefined
-// Dev local: sin env var, construye la URL con la IP del PC (para iPhone en misma red)
-// Producción: usa VITE_API_URL; si falta, cae al backend de Render como seguro HTTPS
-const _isDev = import.meta.env.VITE_SUPABASE_URL?.includes('placeholder')
-const API_URL = _envUrl || (_isDev ? `http://${window.location.hostname}:8000` : 'https://gymlog-5y6y.onrender.com')
+// En producción: /api — mismo dominio (Cloudflare Function proxea a Render).
+// Sin CORS, sin preflight, sin bugs de iOS WKWebView.
+// En dev: backend local directo.
+const API_URL = import.meta.env.DEV
+  ? (import.meta.env.VITE_API_URL as string | undefined ?? `http://${window.location.hostname}:8000`)
+  : '/api'
 
 async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
@@ -15,39 +16,13 @@ async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
 }
 
 export function wakeUpBackend(): void {
-  fetch(`${API_URL}/health`).catch(() => { /* fire-and-forget: solo activa el boot de Render */ })
-}
-
-// XHR para métodos no-GET: bypass del Service Worker en iOS WKWebView.
-// El SW de Workbox intercepta fetch() pero NO XMLHttpRequest, así que el POST
-// va directo a la red evitando el bug de WKWebView con request bodies en SW.
-function xhrFetch<T>(url: string, method: string, headers: Record<string, string>, body?: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open(method, url)
-    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText) as T)
-      } else {
-        reject(new Error(`API ${xhr.status}: ${xhr.responseText}`))
-      }
-    }
-    xhr.onerror = () => reject(new Error(`Fetch failed (${url}): network error`))
-    xhr.ontimeout = () => reject(new Error(`Fetch failed (${url}): timeout`))
-    xhr.send(body ?? null)
-  })
+  fetch(`${API_URL}/health`).catch(() => { /* fire-and-forget: activa el boot de Render */ })
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = await getAuthHeaders(method)
   const url = `${API_URL}${path}`
-
-  if (method !== 'GET') {
-    return xhrFetch<T>(url, method, { ...headers, ...(init.headers as Record<string, string> | undefined) }, init.body as string | undefined)
-  }
-
   let res: Response
   try {
     res = await fetch(url, { ...init, headers: { ...headers, ...init.headers } })
