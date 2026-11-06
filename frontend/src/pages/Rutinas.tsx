@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { db, type Exercise, type Routine, type RoutineDay, type RoutineDayExercise } from '../db/schema'
 import { useAuth } from '../lib/auth'
 import { apiFetch } from '../lib/api'
@@ -222,6 +222,11 @@ function RoutineDetail({ routineId }: { routineId: string }) {
 
 function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: string; onDelete: () => void }) {
   const [open, setOpen] = useState(false)
+
+  // --- editar nombre del día ---
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(day.name)
+
   const rdes = useLiveQuery(
     () => db.routine_day_exercises.filter((r) => r.routine_day_id === day.id && !r.deleted_at).sortBy('position'),
     [day.id]
@@ -241,7 +246,38 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
   const [editRepMax, setEditRepMax] = useState(12)
   const [editTargetWeight, setEditTargetWeight] = useState('')
 
+  // --- drag para reordenar ejercicios ---
+  const [dragging, setDragging] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  // Lista visual: reordena durante el drag sin tocar Dexie todavía
+  const displayedRdes = useMemo(() => {
+    if (!rdes) return []
+    if (dragging === null || dragOver === null || dragging === dragOver) return rdes
+    const arr = [...rdes]
+    const [moved] = arr.splice(dragging, 1)
+    arr.splice(dragOver, 0, moved)
+    return arr
+  }, [rdes, dragging, dragOver])
+
   const exMap: Record<string, Exercise> = exercises ? Object.fromEntries(exercises.map((e: Exercise) => [e.id, e])) : {}
+
+  async function saveDayName() {
+    const trimmed = nameInput.trim()
+    if (!trimmed) return
+    const now = new Date().toISOString()
+    await db.routine_days.update(day.id, { name: trimmed, updated_at: now })
+    await db.outbox.add({
+      table: 'routine_days',
+      record_id: day.id,
+      op: 'upsert',
+      payload: { id: day.id, routine_id: day.routine_id, name: trimmed, position: day.position, updated_at: now, deleted_at: null },
+      ts: now,
+    })
+    setEditingName(false)
+  }
 
   function handlePickExercise(ex: Exercise) {
     setSelectedEx(ex.id)
@@ -298,24 +334,102 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
     setEditingRDE(null)
   }
 
+  // --- handlers de drag ---
+  function handleDragPointerDown(e: React.PointerEvent, index: number) {
+    e.preventDefault()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    setDragging(index)
+    setDragOver(index)
+    setDraggingId(rdes?.[index]?.id ?? null)
+  }
+
+  function handleDragPointerMove(e: React.PointerEvent) {
+    if (dragging === null) return
+    const y = e.clientY
+    for (let i = 0; i < itemRefs.current.length; i++) {
+      const el = itemRefs.current[i]
+      if (!el) continue
+      const rect = el.getBoundingClientRect()
+      if (y >= rect.top && y < rect.bottom) {
+        if (dragOver !== i) setDragOver(i)
+        break
+      }
+    }
+  }
+
+  async function handleDragPointerUp() {
+    const from = dragging
+    const to = dragOver
+    setDragging(null)
+    setDragOver(null)
+    setDraggingId(null)
+
+    if (from !== null && to !== null && from !== to) {
+      const arr = [...(rdes ?? [])]
+      const [moved] = arr.splice(from, 1)
+      arr.splice(to, 0, moved)
+      const now = new Date().toISOString()
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i].position !== i) {
+          const item = arr[i]
+          await db.routine_day_exercises.update(item.id, { position: i, updated_at: now })
+          await db.outbox.add({
+            table: 'routine_day_exercises',
+            record_id: item.id,
+            op: 'upsert',
+            payload: { ...item, position: i, updated_at: now },
+            ts: now,
+          })
+        }
+      }
+    }
+  }
+
   return (
     <div className="bg-gray-750 rounded-lg">
       <div className="flex items-center gap-1">
-        <button onClick={() => setOpen(!open)} className="flex-1 text-left px-3 py-2 text-gray-300 text-sm flex justify-between items-center">
-          <span>{day.name}</span>
-          <span className="text-gray-500">{open ? '▲' : '▼'}</span>
-        </button>
-        <DeleteButton onConfirm={onDelete} size="sm" />
+        {editingName ? (
+          <>
+            <input
+              autoFocus
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveDayName()
+                if (e.key === 'Escape') { setEditingName(false); setNameInput(day.name) }
+              }}
+              className="flex-1 ml-3 bg-gray-700 border border-indigo-500 rounded-lg px-2 py-1.5 text-white text-sm focus:outline-none"
+            />
+            <button onClick={saveDayName} className="text-indigo-400 hover:text-indigo-300 flex items-center justify-center min-w-[36px] min-h-[36px] text-base">✓</button>
+            <button onClick={() => { setEditingName(false); setNameInput(day.name) }} className="text-gray-500 flex items-center justify-center min-w-[36px] min-h-[36px] text-sm">✕</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setOpen(!open)} className="flex-1 text-left px-3 py-2 text-gray-300 text-sm flex justify-between items-center">
+              <span>{day.name}</span>
+              <span className="text-gray-500">{open ? '▲' : '▼'}</span>
+            </button>
+            <button
+              onClick={() => { setEditingName(true); setNameInput(day.name) }}
+              className="text-gray-600 hover:text-indigo-400 flex items-center justify-center min-w-[36px] min-h-[36px] shrink-0"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </button>
+            <DeleteButton onConfirm={onDelete} size="sm" />
+          </>
+        )}
       </div>
 
       {open && (
         <div className="px-3 pb-3 space-y-1.5">
-          {rdes?.map((rde: RoutineDayExercise) => {
+          {displayedRdes.map((rde: RoutineDayExercise, index: number) => {
             const ex = exMap[rde.exercise_id]
             if (!ex) return null
             if (editingRDE === rde.id) {
               return (
-                <div key={rde.id} className="bg-gray-800 rounded-lg px-3 py-2.5">
+                <div key={rde.id} ref={(el) => { itemRefs.current[index] = el }} className="bg-gray-800 rounded-lg px-3 py-2.5">
                   <p className="text-white text-xs font-semibold mb-2">{ex.name}</p>
                   <div className="flex gap-2 flex-wrap items-center mb-2.5">
                     <div className="flex gap-1 items-center">
@@ -346,7 +460,11 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
               )
             }
             return (
-              <div key={rde.id} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-1.5">
+              <div
+                key={rde.id}
+                ref={(el) => { itemRefs.current[index] = el }}
+                className={`bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-1.5 transition-opacity ${rde.id === draggingId ? 'opacity-50 ring-1 ring-indigo-500' : ''}`}
+              >
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-xs font-medium">{ex.name}</p>
                   <p className="text-gray-400 text-xs">
@@ -363,6 +481,20 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
                   </svg>
                 </button>
                 <DeleteButton onConfirm={() => deleteRDE(rde.id)} size="sm" />
+                {/* Handle de arrastre — manteniendo pulsado y arrastrando reordena */}
+                <div
+                  className="touch-none select-none text-gray-600 hover:text-gray-400 flex items-center justify-center min-w-[36px] min-h-[44px] shrink-0 cursor-grab active:cursor-grabbing"
+                  onPointerDown={(e) => handleDragPointerDown(e, index)}
+                  onPointerMove={handleDragPointerMove}
+                  onPointerUp={handleDragPointerUp}
+                  onPointerCancel={() => { setDragging(null); setDragOver(null); setDraggingId(null) }}
+                >
+                  <svg viewBox="0 0 10 16" fill="currentColor" className="w-3 h-4">
+                    <circle cx="2" cy="2" r="1.5" /><circle cx="8" cy="2" r="1.5" />
+                    <circle cx="2" cy="8" r="1.5" /><circle cx="8" cy="8" r="1.5" />
+                    <circle cx="2" cy="14" r="1.5" /><circle cx="8" cy="14" r="1.5" />
+                  </svg>
+                </div>
               </div>
             )
           })}
