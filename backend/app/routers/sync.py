@@ -78,6 +78,18 @@ def sync_push(
     applied = 0
     errors: list[str] = []
 
+    # Debug temporal: log cambios recibidos
+    for tbl in ("sessions", "session_exercises", "sets"):
+        rows = [c for c in body.changes if c.table == tbl]
+        if rows:
+            print(
+                f"[sync_push] {tbl} ({len(rows)}): "
+                + ", ".join(
+                    f"{c.record_id[:8]}(del={c.payload.get('deleted_at')},upd={str(c.payload.get('updated_at',''))[:19]})"
+                    for c in rows
+                )
+            )
+
     # Orden topológico: padres antes que hijos para no violar FKs durante el flush
     sorted_changes = sorted(
         body.changes,

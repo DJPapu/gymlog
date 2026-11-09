@@ -23,6 +23,15 @@ export async function syncPush(): Promise<number> {
   const entries = await db.outbox.orderBy('ts').toArray()
   if (entries.length === 0) return 0
 
+  const seEntries = entries.filter((e) => e.table === 'session_exercises')
+  console.log('[push] outbox total:', entries.length,
+    'session_exercises:', seEntries.map((e) => ({
+      id: e.record_id.slice(0, 8),
+      session_id: ((e.payload as Record<string, unknown>).session_id as string | undefined)?.slice(0, 8),
+      deleted_at: (e.payload as Record<string, unknown>).deleted_at,
+    }))
+  )
+
   const resp = await apiFetch<PushResponse>('/sync/push', {
     method: 'POST',
     body: JSON.stringify({
@@ -35,6 +44,7 @@ export async function syncPush(): Promise<number> {
     }),
   })
 
+  console.log('[push] respuesta:', resp.applied, 'applied, errores:', resp.errors)
   await db.outbox.bulkDelete(entries.map((e) => e.id!))
 
   if (resp.errors.length > 0) {
