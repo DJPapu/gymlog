@@ -17,33 +17,19 @@ export async function onRequest(context) {
   // Cloudflare añade host del origen — quitarlo para que Render vea el suyo propio
   headers.delete('host')
 
-  // Reenviar la IP real del usuario para que el bot management de Render
-  // reconozca tráfico legítimo en lugar de la IP del datacenter de Pages.
+  // Reenviar la IP real del usuario: ayuda al bot management de Render a distinguir
+  // tráfico legítimo de scrapers.
   const clientIp = request.headers.get('CF-Connecting-IP')
   if (clientIp) headers.set('X-Forwarded-For', clientIp)
 
-  const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
-
-  // Buffereamos el body una sola vez para poder reintentarlo si llega 429.
-  let bodyBuffer = null
-  if (hasBody) {
-    bodyBuffer = await request.arrayBuffer()
-  }
-
-  const makeInit = () => ({
+  const init = {
     method: request.method,
     headers,
-    ...(hasBody ? { body: bodyBuffer } : {}),
-  })
-
-  let response = await fetch(backendUrl, makeInit())
-
-  // Cloudflare Bot Management en Render devuelve 429 cuando el backend está dormido.
-  // Esperamos 10s (el backend arranca en ~30-60s) y reintentamos una vez.
-  if (response.status === 429) {
-    await new Promise((r) => setTimeout(r, 10_000))
-    response = await fetch(backendUrl, makeInit())
   }
 
-  return response
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    init.body = request.body
+  }
+
+  return fetch(backendUrl, init)
 }

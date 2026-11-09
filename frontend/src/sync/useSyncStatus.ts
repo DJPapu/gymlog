@@ -13,8 +13,9 @@ const isRetriableError = (msg: string) =>
   /fetch failed|load failed|network/i.test(msg) ||
   /API (429|503):/.test(msg)
 
-// Backoff: 5s, 15s, 30s → reintentos en T=5, 20, 50s
-const RETRY_DELAYS = [5_000, 15_000, 30_000]
+// Backoff: 5s, 15s, 30s, 25s → reintentos en T=5, 20, 50, 75s
+// Render Free puede tardar hasta 60s en arrancar; 75s cubre el peor caso.
+const RETRY_DELAYS = [5_000, 15_000, 30_000, 25_000]
 
 export function useSyncStatus() {
   const pendingCount = useLiveQuery(() => db.outbox.count(), []) ?? 0
