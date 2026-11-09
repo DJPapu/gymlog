@@ -65,5 +65,9 @@ export default function SyncBadge({ state, pendingCount, onSync, lastError }: Pr
       </button>
     )
   }
-  return <span className="text-gray-400 text-xs">✓ Sincronizado</span>
+  return (
+    <button onClick={onSync} className="text-gray-400 text-xs">
+      ✓ Sincronizado
+    </button>
+  )
 }
