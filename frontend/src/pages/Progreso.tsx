@@ -1,8 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
+import {
+  Bar, BarChart, ReferenceLine, ResponsiveContainer,
+  Tooltip, XAxis, YAxis,
+} from 'recharts'
+import { DeleteButton } from '../components/DeleteButton'
 import { db, type Session, type SessionExercise, type SetRecord } from '../db/schema'
 import { useAuth } from '../lib/auth'
-import { DeleteButton } from '../components/DeleteButton'
 
 export default function Progreso() {
   const { user } = useAuth()
@@ -125,14 +129,18 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-100 px-4 pt-3 pb-4 space-y-4">
+        <div className="border-t border-gray-100 px-4 pt-3 pb-4 space-y-5">
           {!sessionExercises ? (
             <p className="text-gray-400 text-xs">Cargando...</p>
           ) : sessionExercises.length === 0 ? (
             <p className="text-gray-400 text-xs">Sin ejercicios registrados</p>
           ) : (
             sessionExercises.map((se: SessionExercise) => (
-              <ExerciseSummary key={se.id} sessionExercise={se} />
+              <ExerciseSummary
+                key={se.id}
+                sessionExercise={se}
+                routineDayId={session.routine_day_id ?? null}
+              />
             ))
           )}
           {session.notes && (
@@ -148,7 +156,13 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
 
 // ── Resumen de ejercicio dentro de una sesión ───────────────────────────────
 
-function ExerciseSummary({ sessionExercise: se }: { sessionExercise: SessionExercise }) {
+function ExerciseSummary({
+  sessionExercise: se,
+  routineDayId,
+}: {
+  sessionExercise: SessionExercise
+  routineDayId: string | null
+}) {
   const exercise = useLiveQuery(() => db.exercises.get(se.exercise_id), [se.exercise_id])
   const sets = useLiveQuery(
     () =>
@@ -157,15 +171,66 @@ function ExerciseSummary({ sessionExercise: se }: { sessionExercise: SessionExer
         .sortBy('set_index'),
     [se.id],
   )
+  const rde = useLiveQuery(
+    () =>
+      routineDayId
+        ? db.routine_day_exercises
+            .filter(
+              (r) =>
+                r.routine_day_id === routineDayId &&
+                r.exercise_id === se.exercise_id &&
+                !r.deleted_at,
+            )
+            .first()
+        : undefined,
+    [routineDayId, se.exercise_id],
+  )
 
   if (!exercise || !sets) return null
 
-  const completedSets = sets.filter((s) => s.completed && !s.is_warmup)
+  const effectiveSets = sets.filter((s) => s.completed && !s.is_warmup)
   const totalSets = sets.filter((s) => !s.is_warmup)
+  const hasWeightData = effectiveSets.some((s) => s.weight_kg != null)
+
+  const targetWeight = rde?.target_weight_kg ?? null
+  const increment = exercise.weight_increment_kg ?? 2.5
+
+  // Suggestion logic
+  let suggestion: { direction: 'up' | 'down'; maxWeight: number } | null = null
+  if (hasWeightData && targetWeight != null) {
+    const maxWeight = Math.max(...effectiveSets.map((s) => s.weight_kg!))
+    if (maxWeight >= targetWeight + increment * 0.5) {
+      suggestion = { direction: 'up', maxWeight }
+    } else if (maxWeight <= targetWeight - increment * 0.5) {
+      suggestion = { direction: 'down', maxWeight }
+    }
+  }
+
+  // Chart data: one bar per effective (non-warmup, completed) set
+  const chartData = effectiveSets
+    .filter((s) => s.weight_kg != null)
+    .map((s, i) => ({
+      n: String(i + 1),
+      weight: s.weight_kg!,
+      reps: s.reps,
+      rpe: s.rpe,
+    }))
+
+  // Y-axis domain: start a bit below min to show differences clearly
+  const weights = chartData.map((d) => d.weight)
+  const allWeights = targetWeight != null ? [...weights, targetWeight] : weights
+  const domainMin =
+    allWeights.length > 0
+      ? Math.max(0, Math.floor((Math.min(...allWeights) - increment * 2) / 5) * 5)
+      : 0
+  const domainMax =
+    allWeights.length > 0
+      ? Math.ceil((Math.max(...allWeights) + increment) / 5) * 5
+      : 'auto'
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-1.5">
+      <div className="flex items-center gap-2 mb-2">
         {exercise.photo_ref && (
           <img
             src={`/${exercise.photo_ref}`}
@@ -173,17 +238,79 @@ function ExerciseSummary({ sessionExercise: se }: { sessionExercise: SessionExer
             className="w-7 h-7 object-cover rounded shrink-0"
           />
         )}
-        <p className="text-gray-900 text-sm font-medium leading-tight">{exercise.name}</p>
-        <span className="ml-auto text-gray-400 text-xs shrink-0">
-          {completedSets.length}/{totalSets.length} series
+        <p className="text-gray-900 text-sm font-medium leading-tight flex-1">{exercise.name}</p>
+        <span className="text-gray-400 text-xs shrink-0">
+          {effectiveSets.length}/{totalSets.length} series
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {sets.map((s: SetRecord) => (
-          <SetChip key={s.id} set={s} />
-        ))}
-      </div>
+      {hasWeightData && chartData.length > 0 ? (
+        <ResponsiveContainer width="100%" height={130}>
+          <BarChart data={chartData} margin={{ top: 8, right: 32, bottom: 0, left: -16 }}>
+            <XAxis
+              dataKey="n"
+              tick={{ fontSize: 10, fill: '#9ca3af' }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#9ca3af' }}
+              tickLine={false}
+              axisLine={false}
+              domain={[domainMin, domainMax]}
+            />
+            <Tooltip
+              contentStyle={{
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                fontSize: 12,
+                padding: '4px 10px',
+              }}
+              formatter={(value: number, _name: string, entry) => {
+                const d = entry.payload as typeof chartData[0]
+                const parts = [`${value} kg`]
+                if (d.reps != null) parts.push(`× ${d.reps} reps`)
+                if (d.rpe != null) parts.push(`RPE ${d.rpe}`)
+                return [parts.join('  '), '']
+              }}
+              labelFormatter={(label) => `Serie ${label}`}
+            />
+            <Bar dataKey="weight" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            {targetWeight != null && (
+              <ReferenceLine
+                y={targetWeight}
+                stroke="#10b981"
+                strokeDasharray="5 3"
+                label={{
+                  value: `Obj. ${targetWeight} kg`,
+                  position: 'right',
+                  fontSize: 10,
+                  fill: '#10b981',
+                }}
+              />
+            )}
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {sets.map((s: SetRecord) => (
+            <SetChip key={s.id} set={s} />
+          ))}
+        </div>
+      )}
+
+      {suggestion && (
+        <p
+          className={`text-xs mt-1.5 font-medium ${
+            suggestion.direction === 'up' ? 'text-emerald-600' : 'text-amber-600'
+          }`}
+        >
+          {suggestion.direction === 'up'
+            ? `↑ Superaste el objetivo (${targetWeight} kg → ${suggestion.maxWeight} kg). Sube el peso en la próxima sesión.`
+            : `↓ Quedaste por debajo del objetivo (${targetWeight} kg). Considera ajustar.`}
+        </p>
+      )}
 
       {se.notes && (
         <p className="text-gray-400 text-xs mt-1.5 italic">{se.notes}</p>

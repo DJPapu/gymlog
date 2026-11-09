@@ -156,7 +156,8 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
 
   useEffect(() => {
     if (!rde?.target_weight_kg || !sets || !exercise) return
-    if (completedCount === 0 || completedCount !== totalCount) return
+    const targetSets = rde.target_sets ?? 1
+    if (completedCount < targetSets) return
     if (promptedRef.current) return
     const doneSets = sets.filter((s) => s.completed && !s.is_warmup && s.weight_kg != null)
     if (doneSets.length === 0) return
