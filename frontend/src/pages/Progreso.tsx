@@ -271,7 +271,7 @@ function ExerciseSummary({
                 fontSize: 12,
                 padding: '4px 10px',
               }}
-              formatter={(value: number) => [`${value} kg`, 'Peso']}
+              formatter={(value) => [value != null ? `${value} kg` : '', 'Peso']}
               labelFormatter={(label) => `Serie ${label}`}
             />
             <Bar dataKey="weight" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={40} />
