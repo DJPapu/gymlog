@@ -4,6 +4,7 @@ import { useSyncStatus } from '../../sync/useSyncStatus'
 import SyncBadge from '../../components/SyncBadge'
 import AdminRutinas from './AdminRutinas'
 import AdminCatalogo from './AdminCatalogo'
+import Progreso from '../Progreso'
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL as string | undefined
 
@@ -29,6 +30,7 @@ function AdminShell() {
         <nav className="flex gap-1 flex-1">
           <TabLink to="/admin/rutinas" active={tab === 'rutinas'}>Rutinas</TabLink>
           <TabLink to="/admin/catalogo" active={tab === 'catalogo'}>Catálogo</TabLink>
+          <TabLink to="/admin/progreso" active={tab === 'progreso'}>Progreso</TabLink>
         </nav>
         <SyncBadge state={state} pendingCount={pendingCount} onSync={doSync} lastError={lastError} />
         <Link to="/" className="text-gray-400 hover:text-gray-700 text-sm transition-colors">← App móvil</Link>
@@ -39,6 +41,7 @@ function AdminShell() {
           <Route index element={<Navigate to="rutinas" replace />} />
           <Route path="rutinas" element={<AdminRutinas />} />
           <Route path="catalogo" element={<AdminCatalogo />} />
+          <Route path="progreso" element={<Progreso />} />
         </Routes>
       </main>
     </div>

@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { db, type Exercise, type SessionExercise, type SetRecord } from '../db/schema'
+import { db, type SessionExercise, type SetRecord } from '../db/schema'
 import { getLastSession, type LastSessionSummary } from '../lib/lastSession'
 import { DeleteButton } from '../components/DeleteButton'
 
@@ -19,6 +19,35 @@ export default function Sesion() {
   )
 
   const [finishing, setFinishing] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+
+  // Auto-guardado cada 2 minutos mientras la sesión está activa
+  useEffect(() => {
+    if (!session || session.ended_at || !sessionId) return
+
+    async function saveCheckpoint() {
+      const ses = await db.session_exercises
+        .filter((se) => se.session_id === sessionId && !se.deleted_at)
+        .toArray()
+      const seIds = ses.map((se) => se.id)
+      const allSets = await db.sets
+        .filter((s) => seIds.includes(s.session_exercise_id) && !s.deleted_at)
+        .toArray()
+      const now = new Date().toISOString()
+      await db.transaction('rw', [db.outbox], async () => {
+        for (const se of ses) {
+          await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: se, ts: now })
+        }
+        for (const s of allSets) {
+          await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
+        }
+      })
+      setLastSaved(new Date())
+    }
+
+    const interval = setInterval(saveCheckpoint, 2 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [session?.ended_at, sessionId])
 
   async function finishSession() {
     if (!sessionId || !session) return
@@ -64,7 +93,14 @@ export default function Sesion() {
         <button onClick={() => navigate('/')} className="text-gray-500 text-sm min-h-[44px] px-2">
           ← Atrás
         </button>
-        <h2 className="text-base font-bold text-gray-900">Sesión en curso</h2>
+        <div className="text-center">
+          <h2 className="text-base font-bold text-gray-900">Sesión en curso</h2>
+          {lastSaved && (
+            <p className="text-xs text-gray-400">
+              Guardado {lastSaved.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
+        </div>
         <button
           onClick={finishSession}
           disabled={finishing}
@@ -108,6 +144,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
   const [showNote, setShowNote] = useState(false)
   const [note, setNote] = useState(se.notes ?? '')
   const [updatePrompt, setUpdatePrompt] = useState<{ direction: 'up' | 'down'; suggestedWeight: number; currentTarget: number } | null>(null)
+  const [savedEx, setSavedEx] = useState(false)
   const promptedRef = useRef(false)
 
   useEffect(() => {
@@ -139,6 +176,21 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
     const now = new Date().toISOString()
     await db.session_exercises.update(se.id, { notes: note || null, updated_at: now })
     setShowNote(false)
+  }
+
+  async function saveExercise() {
+    const allSets = await db.sets
+      .filter((s) => s.session_exercise_id === se.id && !s.deleted_at)
+      .toArray()
+    const now = new Date().toISOString()
+    await db.transaction('rw', [db.outbox], async () => {
+      await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: se, ts: now })
+      for (const s of allSets) {
+        await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
+      }
+    })
+    setSavedEx(true)
+    setTimeout(() => setSavedEx(false), 2000)
   }
 
   async function updateTarget(newWeight: number) {
@@ -209,21 +261,22 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
       </div>
 
       {/* Cabecera columnas */}
-      <div className="px-4 pb-1 grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 text-xs text-gray-400">
+      <div className="px-4 pb-1 grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 text-xs text-gray-400">
         <span>#</span>
         <span className="text-center">Peso (kg)</span>
         <span className="text-center">Reps</span>
+        <span />
         <span />
       </div>
 
       {/* Sets */}
       <div className="divide-y divide-gray-100">
         {sets?.map((set: SetRecord) => (
-          <SetRow key={set.id} set={set} exercise={exercise} />
+          <SetRow key={set.id} set={set} />
         ))}
       </div>
 
-      {/* Botón añadir serie + eliminar ejercicio */}
+      {/* Pie: añadir serie + guardar + eliminar ejercicio */}
       <div className="px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => addSet(se.id)}
@@ -231,7 +284,17 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
         >
           + Añadir serie
         </button>
-        <DeleteButton onConfirm={deleteExercise} size="sm" />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={saveExercise}
+            className={`text-sm font-medium transition-colors ${
+              savedEx ? 'text-green-600' : 'text-gray-400 hover:text-indigo-600'
+            }`}
+          >
+            {savedEx ? '✓ Guardado' : '↑ Guardar'}
+          </button>
+          <DeleteButton onConfirm={deleteExercise} size="sm" />
+        </div>
       </div>
 
       {/* Sugerencia de actualizar objetivo */}
@@ -289,7 +352,7 @@ async function addSet(sessionExerciseId: string) {
 
 // ── Fila de serie ───────────────────────────────────────────────────────────
 
-function SetRow({ set }: { set: SetRecord; exercise: Exercise }) {
+function SetRow({ set }: { set: SetRecord }) {
   const increment = 0.5
 
   async function update(patch: Partial<SetRecord>) {
@@ -299,6 +362,12 @@ function SetRow({ set }: { set: SetRecord; exercise: Exercise }) {
 
   async function toggleComplete() {
     await update({ completed: !set.completed })
+  }
+
+  async function deleteSet() {
+    const now = new Date().toISOString()
+    await db.sets.update(set.id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({ table: 'sets', record_id: set.id, op: 'delete', payload: { deleted_at: now }, ts: now })
   }
 
   const [showRPE, setShowRPE] = useState(false)
@@ -313,7 +382,7 @@ function SetRow({ set }: { set: SetRecord; exercise: Exercise }) {
         set.completed ? 'bg-green-50' : ''
       }`}
     >
-      <div className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 items-center">
+      <div className="grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 items-center">
         {/* Número */}
         <span className="text-gray-400 text-sm font-mono">
           {set.is_warmup ? 'C' : set.set_index + 1}
@@ -378,6 +447,15 @@ function SetRow({ set }: { set: SetRecord; exercise: Exercise }) {
           }`}
         >
           ✓
+        </button>
+
+        {/* Borrar serie */}
+        <button
+          onClick={deleteSet}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors min-h-[44px] min-w-[44px]"
+          aria-label="Borrar serie"
+        >
+          ×
         </button>
       </div>
 
