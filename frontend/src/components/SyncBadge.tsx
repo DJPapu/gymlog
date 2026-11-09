@@ -1,3 +1,4 @@
+import { BACKEND_ORIGIN } from '../lib/api'
 import { type SyncState } from '../sync/useSyncStatus'
 
 interface Props {
@@ -7,11 +8,14 @@ interface Props {
   lastError?: string | null
 }
 
+function isCloudflareChallenge(msg: string): boolean {
+  return msg.includes('<!DOCTYPE') || msg.includes('API 429:')
+}
+
 function friendlyError(msg: string | null | undefined): string {
   if (!msg) return ''
-  if (msg.includes('<!DOCTYPE') || /API (429|503):/.test(msg)) {
-    return 'Servidor activándose… reintentando'
-  }
+  if (isCloudflareChallenge(msg)) return 'Cloudflare bloqueó la petición (backend dormido). Toca "Despertar" y luego reintentar.'
+  if (msg.includes('API 503:')) return 'Backend no disponible (503). Puede estar arrancando.'
   return msg.length > 160 ? msg.slice(0, 160) + '…' : msg
 }
 
@@ -26,18 +30,32 @@ export default function SyncBadge({ state, pendingCount, onSync, lastError }: Pr
     return <span className="text-gray-400 text-xs">Sin conexión</span>
   }
   if (state === 'error') {
+    const showWakeButton = !!lastError && isCloudflareChallenge(lastError)
     return (
-      <button
-        onClick={onSync}
-        className="text-red-500 text-xs text-right leading-tight max-w-[260px]"
-      >
-        <span className="underline">Error al sync — tocar para reintentar</span>
+      <div className="text-right space-y-1">
+        <button
+          onClick={onSync}
+          className="text-red-500 text-xs text-right leading-tight max-w-[260px]"
+        >
+          <span className="underline">Error al sync — tocar para reintentar</span>
+        </button>
         {lastError && (
-          <span className="block text-red-500 text-[10px] mt-0.5 break-all whitespace-pre-wrap">
+          <p className="text-red-400 text-[10px] break-words max-w-[260px]">
             {friendlyError(lastError)}
-          </span>
+          </p>
         )}
-      </button>
+        {showWakeButton && (
+          <a
+            href={`${BACKEND_ORIGIN}/health`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-indigo-500 text-[10px] underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Despertar backend ↗
+          </a>
+        )}
+      </div>
     )
   }
   if (pendingCount > 0) {

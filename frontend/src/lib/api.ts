@@ -1,5 +1,8 @@
 import { supabase } from './supabase'
 
+// URL directa del backend en Render (sólo para diagnóstico / wake button UI).
+export const BACKEND_ORIGIN = 'https://gymlog-5y6y.onrender.com'
+
 // En producción: /api — Cloudflare Pages Function proxea a Render (sin CORS ni preflight).
 // En dev: VITE_API_URL o localhost:8000.
 const API_URL = import.meta.env.DEV

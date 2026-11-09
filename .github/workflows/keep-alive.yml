@@ -2,15 +2,27 @@ name: Keep alive (Supabase + Render)
 
 on:
   schedule:
-    - cron: '0 8 */3 * *'   # cada 3 días a las 8:00 UTC
+    # Cada 14 minutos — Render Free duerme después de 15 min sin peticiones.
+    # Repo público: GitHub Actions es gratis. Repo privado: usar UptimeRobot en su lugar.
+    - cron: '*/14 * * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping backend
+      - name: Ping Render backend
         run: |
-          curl -sf "https://gymlog-5y6y.onrender.com/health" || echo "Backend en cold start, reintentando..."
-          sleep 60
-          curl -sf "https://gymlog-5y6y.onrender.com/health" || echo "Backend no disponible"
+          # Primer intento
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            "https://gymlog-5y6y.onrender.com/health")
+          echo "Status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Backend no respondió en primer intento ($STATUS), esperando 70s para cold start..."
+            sleep 70
+            STATUS2=$(curl -s -o /dev/null -w "%{http_code}" \
+              --max-time 10 \
+              "https://gymlog-5y6y.onrender.com/health")
+            echo "Status retry: $STATUS2"
+          fi
