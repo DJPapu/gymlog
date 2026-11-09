@@ -59,6 +59,32 @@ export default function Progreso() {
 
 function SessionCard({ session, dayName }: { session: Session; dayName?: string }) {
   const [expanded, setExpanded] = useState(false)
+  const [resyncing, setResyncing] = useState(false)
+
+  async function resyncSession() {
+    setResyncing(true)
+    try {
+      const ses = await db.session_exercises
+        .filter((se) => se.session_id === session.id && !se.deleted_at)
+        .toArray()
+      const seIds = ses.map((se) => se.id)
+      const allSets = await db.sets
+        .filter((s) => seIds.includes(s.session_exercise_id) && !s.deleted_at)
+        .toArray()
+      const now = new Date().toISOString()
+      await db.transaction('rw', [db.outbox], async () => {
+        await db.outbox.add({ table: 'sessions', record_id: session.id, op: 'upsert', payload: session, ts: now })
+        for (const se of ses) {
+          await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: se, ts: now })
+        }
+        for (const s of allSets) {
+          await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
+        }
+      })
+    } finally {
+      setResyncing(false)
+    }
+  }
 
   async function deleteSession() {
     const now = new Date().toISOString()
@@ -123,7 +149,15 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
             </div>
           </div>
         </button>
-        <div className="pt-3 pr-2 shrink-0">
+        <div className="pt-3 pr-2 shrink-0 flex items-center gap-1">
+          <button
+            onClick={resyncSession}
+            disabled={resyncing}
+            title="Re-sincronizar sesión"
+            className="text-gray-300 hover:text-indigo-500 disabled:opacity-40 text-base px-1 min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
+          >
+            ↺
+          </button>
           <DeleteButton onConfirm={deleteSession} size="sm" />
         </div>
       </div>
