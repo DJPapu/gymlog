@@ -33,6 +33,13 @@ function AdminShell() {
           <TabLink to="/admin/progreso" active={tab === 'progreso'}>Progreso</TabLink>
         </nav>
         <SyncBadge state={state} pendingCount={pendingCount} onSync={doSync} lastError={lastError} />
+        <button
+          onClick={() => { localStorage.removeItem('gymlog_last_pulled_at'); doSync() }}
+          title="Forzar pull completo (trae todo desde el servidor)"
+          className="text-gray-300 hover:text-indigo-500 text-xs transition-colors"
+        >
+          ⟳ Full sync
+        </button>
         <Link to="/" className="text-gray-400 hover:text-gray-700 text-sm transition-colors">← App móvil</Link>
       </header>
 
