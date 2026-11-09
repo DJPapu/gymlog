@@ -7,6 +7,14 @@ interface Props {
   lastError?: string | null
 }
 
+function friendlyError(msg: string | null | undefined): string {
+  if (!msg) return ''
+  if (msg.includes('<!DOCTYPE') || /API (429|503):/.test(msg)) {
+    return 'Servidor activándose… reintentando'
+  }
+  return msg.length > 160 ? msg.slice(0, 160) + '…' : msg
+}
+
 export default function SyncBadge({ state, pendingCount, onSync, lastError }: Props) {
   if (state === 'syncing') {
     return <span className="text-indigo-600 text-xs animate-pulse">Sincronizando…</span>
@@ -26,7 +34,7 @@ export default function SyncBadge({ state, pendingCount, onSync, lastError }: Pr
         <span className="underline">Error al sync — tocar para reintentar</span>
         {lastError && (
           <span className="block text-red-500 text-[10px] mt-0.5 break-all whitespace-pre-wrap">
-            {lastError}
+            {friendlyError(lastError)}
           </span>
         )}
       </button>

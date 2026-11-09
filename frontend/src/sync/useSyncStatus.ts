@@ -6,7 +6,12 @@ import { wakeUpBackend } from '../lib/api'
 
 export type SyncState = 'idle' | 'syncing' | 'warming' | 'error' | 'offline'
 
-const isNetworkError = (msg: string) => /fetch failed|load failed|network/i.test(msg)
+// Errores que indican que el backend está dormido/arrancando → reintento con backoff.
+// API 429: Cloudflare Bot Management desafía la IP del Pages Worker cuando Render está frío.
+// API 503: backend temporalmente no disponible.
+const isRetriableError = (msg: string) =>
+  /fetch failed|load failed|network/i.test(msg) ||
+  /API (429|503):/.test(msg)
 
 // Backoff: 5s, 15s, 30s → reintentos en T=5, 20, 50s
 const RETRY_DELAYS = [5_000, 15_000, 30_000]
@@ -35,7 +40,7 @@ export function useSyncStatus() {
         return
       } catch (err) {
         lastMsg = err instanceof Error ? err.message : String(err)
-        if (!isNetworkError(lastMsg)) {
+        if (!isRetriableError(lastMsg)) {
           console.warn('[sync] fallo no-red:', lastMsg)
           setLastError(lastMsg)
           setState('error')
@@ -43,7 +48,7 @@ export function useSyncStatus() {
         }
       }
 
-      // Error de red → Render probablemente dormido.
+      // Error retriable (red caída, 429, 503) → Render probablemente dormido.
       // Reintentamos con backoff hasta que responda (max ~50s).
       setState('warming')
       wakeUpBackend() // dispara el boot de Render en paralelo
@@ -55,7 +60,7 @@ export function useSyncStatus() {
           return
         } catch (retryErr) {
           lastMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
-          if (!isNetworkError(lastMsg)) {
+          if (!isRetriableError(lastMsg)) {
             setLastError(lastMsg)
             setState('error')
             return
