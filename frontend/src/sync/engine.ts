@@ -53,6 +53,14 @@ export async function syncPull(): Promise<void> {
   const url = since ? `/sync/pull?since=${encodeURIComponent(since)}` : '/sync/pull'
   const data = await apiFetch<PullResponse>(url)
 
+  console.log('[pull] session_exercises recibidos del servidor:', data.session_exercises.length,
+    data.session_exercises.map((se: Record<string, unknown>) => ({
+      id: (se.id as string)?.slice(0, 8),
+      session_id: (se.session_id as string)?.slice(0, 8),
+      deleted_at: se.deleted_at,
+    }))
+  )
+
   await db.transaction('rw', [
     db.exercises,
     db.routines,
