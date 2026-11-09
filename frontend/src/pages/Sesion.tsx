@@ -53,8 +53,9 @@ export default function Sesion() {
     if (!sessionId || !session) return
     setFinishing(true)
     const now = new Date().toISOString()
-    navigate('/')
 
+    // Todas las escrituras a Dexie/outbox ANTES de navegar.
+    // En iOS, navigate() puede descargar la página y cortar operaciones async en curso.
     await db.sessions.update(sessionId, { ended_at: now, updated_at: now })
 
     const ses = await db.session_exercises
@@ -77,6 +78,8 @@ export default function Sesion() {
         await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
       }
     })
+
+    navigate('/')
   }
 
   if (!session || session.ended_at) {
