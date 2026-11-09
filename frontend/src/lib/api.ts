@@ -25,11 +25,17 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = await getAuthHeaders(method)
   const url = `${API_URL}${path}`
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 20_000) // 20s max por petición
+
   let res: Response
   try {
-    res = await fetch(url, { ...init, headers: { ...headers, ...init.headers } })
+    res = await fetch(url, { ...init, headers: { ...headers, ...init.headers }, signal: controller.signal })
   } catch (err) {
     throw new Error(`Fetch failed (${url}): ${err}`)
+  } finally {
+    clearTimeout(timeoutId)
   }
   if (!res.ok) {
     const text = await res.text()
