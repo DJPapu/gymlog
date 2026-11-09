@@ -1,11 +1,10 @@
 import { supabase } from './supabase'
 
-// VITE_API_URL en Cloudflare Pages apunta a https://gymlog-5y6y.onrender.com
-// (browser → Render directo; evita el Cloudflare Bot Challenge que triggea el Worker).
-// Sin VITE_API_URL en producción: cae al proxy /api como fallback.
-// En dev sin VITE_API_URL: localhost:8000.
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)
-  ?? (import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '/api')
+// En producción: /api — Cloudflare Pages Function proxea a Render (sin CORS ni preflight).
+// En dev: VITE_API_URL o localhost:8000.
+const API_URL = import.meta.env.DEV
+  ? (import.meta.env.VITE_API_URL as string | undefined ?? `http://${window.location.hostname}:8000`)
+  : '/api'
 
 async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
