@@ -35,11 +35,16 @@ export async function syncPush(): Promise<number> {
     }),
   })
 
+  await db.outbox.bulkDelete(entries.map((e) => e.id!))
+
   if (resp.errors.length > 0) {
+    // Guardamos los errores para diagnóstico visible en la UI
+    localStorage.setItem('gymlog_push_errors', JSON.stringify(resp.errors))
     console.warn('[sync] errores en push:', resp.errors)
+    throw new Error(`[push-partial] ${resp.errors.slice(0, 2).join(' | ')}`)
   }
 
-  await db.outbox.bulkDelete(entries.map((e) => e.id!))
+  localStorage.removeItem('gymlog_push_errors')
   return resp.applied
 }
 

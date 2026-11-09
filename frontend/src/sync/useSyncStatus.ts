@@ -10,8 +10,10 @@ export type SyncState = 'idle' | 'syncing' | 'warming' | 'error' | 'offline'
 // API 429: Cloudflare Bot Management desafía la IP del Pages Worker cuando Render está frío.
 // API 503: backend temporalmente no disponible.
 const isRetriableError = (msg: string) =>
-  /fetch failed|load failed|network/i.test(msg) ||
-  /API (429|503):/.test(msg)
+  !msg.startsWith('[push-partial]') && (
+    /fetch failed|load failed|network/i.test(msg) ||
+    /API (429|503):/.test(msg)
+  )
 
 // Backoff: 5s, 15s, 30s, 25s → reintentos en T=5, 20, 50, 75s
 // Render Free puede tardar hasta 60s en arrancar; 75s cubre el peor caso.
