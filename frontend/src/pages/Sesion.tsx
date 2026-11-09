@@ -36,10 +36,10 @@ export default function Sesion() {
       const now = new Date().toISOString()
       await db.transaction('rw', [db.outbox], async () => {
         for (const se of ses) {
-          await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: se, ts: now })
+          await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: { ...se, updated_at: now }, ts: now })
         }
         for (const s of allSets) {
-          await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
+          await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: { ...s, updated_at: now }, ts: now })
         }
       })
       setLastSaved(new Date())
@@ -72,10 +72,10 @@ export default function Sesion() {
         payload: { ...session, ended_at: now, updated_at: now }, ts: now,
       })
       for (const se of ses) {
-        await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: se, ts: now })
+        await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: { ...se, updated_at: now }, ts: now })
       }
       for (const s of allSets) {
-        await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
+        await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: { ...s, updated_at: now }, ts: now })
       }
     })
 
@@ -188,9 +188,9 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
       .toArray()
     const now = new Date().toISOString()
     await db.transaction('rw', [db.outbox], async () => {
-      await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: se, ts: now })
+      await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: { ...se, updated_at: now }, ts: now })
       for (const s of allSets) {
-        await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
+        await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: { ...s, updated_at: now }, ts: now })
       }
     })
     setSavedEx(true)

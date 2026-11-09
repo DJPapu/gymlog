@@ -72,13 +72,16 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
         .filter((s) => seIds.includes(s.session_exercise_id) && !s.deleted_at)
         .toArray()
       const now = new Date().toISOString()
+      // Pisamos updated_at=now en cada payload: el pull incremental filtra por
+      // updated_at > last_pulled_at, así que si el registro tiene un updated_at
+      // antiguo (anterior al último pull de otro cliente) el server no lo devuelve.
       await db.transaction('rw', [db.outbox], async () => {
-        await db.outbox.add({ table: 'sessions', record_id: session.id, op: 'upsert', payload: session, ts: now })
+        await db.outbox.add({ table: 'sessions', record_id: session.id, op: 'upsert', payload: { ...session, updated_at: now }, ts: now })
         for (const se of ses) {
-          await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: se, ts: now })
+          await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'upsert', payload: { ...se, updated_at: now }, ts: now })
         }
         for (const s of allSets) {
-          await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: s, ts: now })
+          await db.outbox.add({ table: 'sets', record_id: s.id, op: 'upsert', payload: { ...s, updated_at: now }, ts: now })
         }
       })
     } finally {
