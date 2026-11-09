@@ -188,33 +188,36 @@ function ExerciseSummary({
 
   if (!exercise || !sets) return null
 
-  const effectiveSets = sets.filter((s) => s.completed && !s.is_warmup)
   const totalSets = sets.filter((s) => !s.is_warmup)
-  const hasWeightData = effectiveSets.some((s) => s.weight_kg != null)
+  const completedSets = sets.filter((s) => s.completed && !s.is_warmup)
 
-  const targetWeight = rde?.target_weight_kg ?? null
-  const increment = exercise.weight_increment_kg ?? 2.5
-
-  // Suggestion logic
-  let suggestion: { direction: 'up' | 'down'; maxWeight: number } | null = null
-  if (hasWeightData && targetWeight != null) {
-    const maxWeight = Math.max(...effectiveSets.map((s) => s.weight_kg!))
-    if (maxWeight >= targetWeight + increment * 0.5) {
-      suggestion = { direction: 'up', maxWeight }
-    } else if (maxWeight <= targetWeight - increment * 0.5) {
-      suggestion = { direction: 'down', maxWeight }
-    }
-  }
-
-  // Chart data: one bar per effective (non-warmup, completed) set
-  const chartData = effectiveSets
+  // Chart: all non-warmup sets with weight data (completed or not)
+  const chartData = totalSets
     .filter((s) => s.weight_kg != null)
     .map((s, i) => ({
       n: String(i + 1),
       weight: s.weight_kg!,
       reps: s.reps,
       rpe: s.rpe,
+      done: s.completed,
     }))
+
+  const targetWeight = rde?.target_weight_kg ?? null
+  const increment = exercise.weight_increment_kg ?? 2.5
+
+  // Suggestion based on completed sets only
+  let suggestion: { direction: 'up' | 'down'; maxWeight: number } | null = null
+  if (completedSets.length > 0 && targetWeight != null) {
+    const completedWithWeight = completedSets.filter((s) => s.weight_kg != null)
+    if (completedWithWeight.length > 0) {
+      const maxWeight = Math.max(...completedWithWeight.map((s) => s.weight_kg!))
+      if (maxWeight >= targetWeight + increment * 0.5) {
+        suggestion = { direction: 'up', maxWeight }
+      } else if (maxWeight <= targetWeight - increment * 0.5) {
+        suggestion = { direction: 'down', maxWeight }
+      }
+    }
+  }
 
   // Y-axis domain: start a bit below min to show differences clearly
   const weights = chartData.map((d) => d.weight)
@@ -240,13 +243,14 @@ function ExerciseSummary({
         )}
         <p className="text-gray-900 text-sm font-medium leading-tight flex-1">{exercise.name}</p>
         <span className="text-gray-400 text-xs shrink-0">
-          {effectiveSets.length}/{totalSets.length} series
+          {completedSets.length}/{totalSets.length} series
         </span>
       </div>
 
-      {hasWeightData && chartData.length > 0 ? (
-        <ResponsiveContainer width="100%" height={130}>
-          <BarChart data={chartData} margin={{ top: 8, right: 32, bottom: 0, left: -16 }}>
+      {chartData.length > 0 ? (
+        <div style={{ width: '100%', height: 130 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 8, right: 48, bottom: 0, left: -16 }}>
             <XAxis
               dataKey="n"
               tick={{ fontSize: 10, fill: '#9ca3af' }}
@@ -267,13 +271,7 @@ function ExerciseSummary({
                 fontSize: 12,
                 padding: '4px 10px',
               }}
-              formatter={(value: number, _name: string, entry) => {
-                const d = entry.payload as typeof chartData[0]
-                const parts = [`${value} kg`]
-                if (d.reps != null) parts.push(`× ${d.reps} reps`)
-                if (d.rpe != null) parts.push(`RPE ${d.rpe}`)
-                return [parts.join('  '), '']
-              }}
+              formatter={(value: number) => [`${value} kg`, 'Peso']}
               labelFormatter={(label) => `Serie ${label}`}
             />
             <Bar dataKey="weight" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={40} />
@@ -292,6 +290,7 @@ function ExerciseSummary({
             )}
           </BarChart>
         </ResponsiveContainer>
+        </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {sets.map((s: SetRecord) => (
