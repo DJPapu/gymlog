@@ -145,10 +145,12 @@ def sync_push(
             applied += 1
 
         except Exception as exc:  # noqa: BLE001
-            extra = ""
             if change.table in ("session_exercises", "routine_day_exercises"):
-                extra = f" [exercise_id={payload.get('exercise_id', '?')}]"
-            errors.append(f"{change.table}/{change.record_id}: {exc!s}{extra}")
+                ex_id = payload.get("exercise_id", "?")
+                print(f"[sync_push] FK on {change.table}/{change.record_id[:8]} exercise_id={ex_id}")
+                errors.append(f"FK: exercise_id={ex_id} no existe en exercises ({change.table}/{change.record_id[:8]})")
+            else:
+                errors.append(f"{change.table}/{change.record_id}: {exc!s}")
 
     try:
         db.commit()
