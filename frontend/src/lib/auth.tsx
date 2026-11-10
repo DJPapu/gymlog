@@ -9,6 +9,7 @@ interface AuthCtx {
 
 const FIXED_USER = {
   id: import.meta.env.VITE_USER_ID ?? 'local-user-dev',
+  email: (import.meta.env.VITE_ADMIN_EMAIL as string | undefined) ?? '',
   user_metadata: { full_name: (import.meta.env.VITE_USER_NAME as string | undefined) ?? 'Valentin' },
 } as unknown as User
 
