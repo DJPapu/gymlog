@@ -1,10 +1,22 @@
+from contextlib import asynccontextmanager
+
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import exercises, routines, sync
 
-app = FastAPI(title="GymLog API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "head")
+    yield
+
+
+app = FastAPI(title="GymLog API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
