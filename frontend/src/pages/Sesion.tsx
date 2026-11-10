@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db, type SessionExercise, type SetRecord } from '../db/schema'
 import { getLastSession, type LastSessionSummary } from '../lib/lastSession'
@@ -19,6 +19,7 @@ export default function Sesion() {
   )
 
   const [finishing, setFinishing] = useState(false)
+  const [showCelebration, setShowCelebration] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
   // Auto-guardado cada 2 minutos mientras la sesión está activa
@@ -79,7 +80,8 @@ export default function Sesion() {
       }
     })
 
-    navigate('/')
+    setShowCelebration(true)
+    setTimeout(() => navigate('/'), 2600)
   }
 
   if (!session || session.ended_at) {
@@ -92,6 +94,7 @@ export default function Sesion() {
 
   return (
     <div className="flex flex-col h-full">
+      {showCelebration && <CelebrationOverlay />}
       <header className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-200">
         <button onClick={() => navigate('/')} className="text-gray-500 text-sm min-h-[44px] px-2">
           ← Atrás
@@ -327,6 +330,49 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Animación de festejo ────────────────────────────────────────────────────
+
+const CONFETTI_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
+
+function CelebrationOverlay() {
+  const pieces = useMemo(() =>
+    Array.from({ length: 70 }, (_, i) => ({
+      id: i,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      left: Math.random() * 100,
+      delay: Math.random() * 0.8,
+      duration: 1.4 + Math.random() * 1.0,
+      size: 7 + Math.random() * 9,
+      aspect: Math.random() > 0.5 ? 0.4 : 1,
+    })), [])
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/75 overflow-hidden">
+      {pieces.map((p) => (
+        <div
+          key={p.id}
+          className="absolute top-0 rounded-sm pointer-events-none"
+          style={{
+            left: `${p.left}%`,
+            width: p.size,
+            height: p.size * p.aspect,
+            background: p.color,
+            animation: `confettiFall ${p.duration}s ${p.delay}s ease-in both`,
+          }}
+        />
+      ))}
+      <div
+        className="relative z-10 text-center px-8 space-y-3"
+        style={{ animation: 'celebrationPop 0.5s ease-out both' }}
+      >
+        <div className="text-8xl">🏆</div>
+        <h2 className="text-white text-3xl font-black tracking-tight">¡Sesión completada!</h2>
+        <p className="text-white/70 text-lg">¡Excelente trabajo, Valentin!</p>
+      </div>
     </div>
   )
 }
