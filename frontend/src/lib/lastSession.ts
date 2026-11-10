@@ -1,4 +1,5 @@
 import { db } from '../db/schema'
+import type { SessionHistory } from './progression'
 
 export interface LastSessionSummary {
   date: string          // ISO
@@ -69,4 +70,52 @@ export async function getLastSession(
     weight_kg: top.weight_kg,
     display,
   }
+}
+
+/**
+ * Últimas N sesiones completadas de un ejercicio, en orden descendente.
+ * Devuelve solo las series efectivas (no calentamiento, completadas).
+ */
+export async function getExerciseHistory(
+  exerciseId: string,
+  limit = 3,
+  excludeSessionId?: string,
+): Promise<SessionHistory[]> {
+  const allSE = await db.session_exercises
+    .filter((se) => se.exercise_id === exerciseId && !se.deleted_at)
+    .toArray()
+
+  const sessionIds = [...new Set(allSE.map((se) => se.session_id))].filter(
+    (id) => id !== excludeSessionId,
+  )
+  if (sessionIds.length === 0) return []
+
+  const sessions = await db.sessions
+    .where('id')
+    .anyOf(sessionIds)
+    .filter((s) => !!s.ended_at && !s.deleted_at)
+    .toArray()
+
+  sessions.sort((a, b) => (b.started_at > a.started_at ? 1 : -1))
+  const recent = sessions.slice(0, limit)
+
+  const result: SessionHistory[] = []
+  for (const session of recent) {
+    const se = allSE.find((s) => s.session_id === session.id)
+    if (!se) continue
+    const sets = await db.sets
+      .filter((s) => s.session_exercise_id === se.id && !s.deleted_at)
+      .toArray()
+    result.push({
+      started_at: session.started_at,
+      sets: sets.map((s) => ({
+        reps: s.reps,
+        weight_kg: s.weight_kg,
+        rpe: s.rpe,
+        completed: s.completed,
+        is_warmup: s.is_warmup,
+      })),
+    })
+  }
+  return result
 }

@@ -2,7 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db, type SessionExercise, type SetRecord } from '../db/schema'
-import { getLastSession, type LastSessionSummary } from '../lib/lastSession'
+import { getExerciseHistory, getLastSession, type LastSessionSummary } from '../lib/lastSession'
+import { suggestProgression, type ProgressionResult } from '../lib/progression'
 import { DeleteButton } from '../components/DeleteButton'
 
 export default function Sesion() {
@@ -147,6 +148,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
     [routineDayId, se.exercise_id],
   )
   const [lastSummary, setLastSummary] = useState<LastSessionSummary | null>(null)
+  const [suggestion, setSuggestion] = useState<ProgressionResult | null>(null)
   const [showNote, setShowNote] = useState(false)
   const [note, setNote] = useState(se.notes ?? '')
   const [updatePrompt, setUpdatePrompt] = useState<{ direction: 'up' | 'down'; suggestedWeight: number; currentTarget: number } | null>(null)
@@ -156,6 +158,22 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
   useEffect(() => {
     getLastSession(se.exercise_id, sessionId).then(setLastSummary)
   }, [se.exercise_id, sessionId])
+
+  useEffect(() => {
+    if (!exercise || !rde) return
+    getExerciseHistory(se.exercise_id, 3, sessionId).then((history) => {
+      setSuggestion(suggestProgression(
+        {
+          rep_min: rde.rep_min,
+          rep_max: rde.rep_max,
+          target_rpe: rde.target_rpe,
+          target_weight_kg: rde.target_weight_kg,
+          weight_increment_kg: exercise.weight_increment_kg ?? 2.5,
+        },
+        history,
+      ))
+    })
+  }, [se.exercise_id, sessionId, exercise?.id, rde?.id])
 
   const completedCount = sets?.filter((s) => s.completed).length ?? 0
   const totalCount = sets?.length ?? 0
@@ -237,6 +255,17 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
             {lastSummary && (
               <p className="text-indigo-600 text-xs mt-0.5">
                 Última vez: {lastSummary.display}
+              </p>
+            )}
+            {suggestion && suggestion.direction !== 'first' && (
+              <p className={`text-xs mt-0.5 font-medium ${
+                suggestion.direction === 'up'
+                  ? 'text-emerald-600'
+                  : suggestion.direction === 'down'
+                  ? 'text-amber-600'
+                  : 'text-gray-400'
+              }`}>
+                {suggestion.reason}
               </p>
             )}
             {exercise.setup_tips && (
