@@ -23,7 +23,7 @@ export default function Progreso() {
     [user?.id],
   )
 
-  const allDays = useLiveQuery(() => db.routine_days.filter((d) => !d.deleted_at).toArray(), [])
+  const allDays = useLiveQuery(() => db.routine_days.toArray(), [])
   const dayMap = allDays ? Object.fromEntries(allDays.map((d) => [d.id, d])) : {}
 
   return (
@@ -118,6 +118,7 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    year: 'numeric',
   })
   const timeStr = startDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
 
