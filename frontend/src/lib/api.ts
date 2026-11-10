@@ -18,7 +18,10 @@ async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
 }
 
 export function wakeUpBackend(): void {
-  fetch(`${API_URL}/health`).catch(() => { /* fire-and-forget: activa el boot de Render */ })
+  // Llama DIRECTAMENTE a Render (no por el proxy de Pages) con UA de navegador,
+  // así Cloudflare no aplica el Bot Management challenge que bloquea el proxy.
+  fetch(`${BACKEND_ORIGIN}/health`, { mode: 'no-cors' })
+    .catch(() => { /* fire-and-forget */ })
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
