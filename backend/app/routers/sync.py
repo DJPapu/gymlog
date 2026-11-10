@@ -145,7 +145,10 @@ def sync_push(
             applied += 1
 
         except Exception as exc:  # noqa: BLE001
-            errors.append(f"{change.table}/{change.record_id}: {exc!s}")
+            extra = ""
+            if change.table in ("session_exercises", "routine_day_exercises"):
+                extra = f" [exercise_id={payload.get('exercise_id', '?')}]"
+            errors.append(f"{change.table}/{change.record_id}: {exc!s}{extra}")
 
     try:
         db.commit()
