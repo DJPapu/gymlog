@@ -187,10 +187,29 @@ function RoutineDetail({ routineId }: { routineId: string }) {
     await db.outbox.add({ table: 'routine_days', record_id: id, op: 'delete', payload: { deleted_at: now }, ts: now })
   }
 
+  async function swapDays(i: number, dir: -1 | 1) {
+    if (!days) return
+    const j = i + dir
+    if (j < 0 || j >= days.length) return
+    const a = days[i], b = days[j]
+    const now = new Date().toISOString()
+    await db.routine_days.update(a.id, { position: b.position, updated_at: now })
+    await db.outbox.add({ table: 'routine_days', record_id: a.id, op: 'upsert', payload: { ...a, position: b.position, updated_at: now }, ts: now })
+    await db.routine_days.update(b.id, { position: a.position, updated_at: now })
+    await db.outbox.add({ table: 'routine_days', record_id: b.id, op: 'upsert', payload: { ...b, position: a.position, updated_at: now }, ts: now })
+  }
+
   return (
     <div className="ml-4 mt-1 space-y-1">
-      {days?.map((day: RoutineDay) => (
-        <DayDetail key={day.id} day={day} routineId={routineId} onDelete={() => deleteDay(day.id)} />
+      {days?.map((day: RoutineDay, i: number) => (
+        <DayDetail
+          key={day.id}
+          day={day}
+          routineId={routineId}
+          onDelete={() => deleteDay(day.id)}
+          onMoveUp={i > 0 ? () => swapDays(i, -1) : undefined}
+          onMoveDown={i < (days?.length ?? 0) - 1 ? () => swapDays(i, 1) : undefined}
+        />
       ))}
 
       {showNewDay ? (
@@ -220,7 +239,10 @@ function RoutineDetail({ routineId }: { routineId: string }) {
   )
 }
 
-function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: string; onDelete: () => void }) {
+function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
+  day: RoutineDay; routineId: string; onDelete: () => void
+  onMoveUp?: () => void; onMoveDown?: () => void
+}) {
   const [open, setOpen] = useState(false)
 
   const [editingName, setEditingName] = useState(false)
@@ -413,6 +435,10 @@ function DayDetail({ day, routineId, onDelete }: { day: RoutineDay; routineId: s
                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
               </svg>
             </button>
+            <button onClick={onMoveUp} disabled={!onMoveUp}
+              className="text-gray-300 hover:text-gray-600 disabled:opacity-20 flex items-center justify-center min-w-[30px] min-h-[36px] text-xs shrink-0">▲</button>
+            <button onClick={onMoveDown} disabled={!onMoveDown}
+              className="text-gray-300 hover:text-gray-600 disabled:opacity-20 flex items-center justify-center min-w-[30px] min-h-[36px] text-xs shrink-0">▼</button>
             <DeleteButton onConfirm={onDelete} size="sm" />
           </>
         )}

@@ -172,13 +172,31 @@ function RoutineEditor({ routine }: { routine: Routine }) {
     await db.outbox.add({ table: 'routine_days', record_id: id, op: 'delete', payload: { deleted_at: now }, ts: now })
   }
 
+  async function swapDays(i: number, dir: -1 | 1) {
+    if (!days) return
+    const j = i + dir
+    if (j < 0 || j >= days.length) return
+    const a = days[i], b = days[j]
+    const now = new Date().toISOString()
+    await db.routine_days.update(a.id, { position: b.position, updated_at: now })
+    await db.outbox.add({ table: 'routine_days', record_id: a.id, op: 'upsert', payload: { ...a, position: b.position, updated_at: now }, ts: now })
+    await db.routine_days.update(b.id, { position: a.position, updated_at: now })
+    await db.outbox.add({ table: 'routine_days', record_id: b.id, op: 'upsert', payload: { ...b, position: a.position, updated_at: now }, ts: now })
+  }
+
   return (
     <div className="max-w-4xl">
       <h2 className="text-gray-900 text-xl font-bold mb-5">{routine.name}</h2>
 
       <div className="space-y-5">
-        {days?.map((day) => (
-          <DaySection key={day.id} day={day} onDelete={() => deleteDay(day.id)} />
+        {days?.map((day, i) => (
+          <DaySection
+            key={day.id}
+            day={day}
+            onDelete={() => deleteDay(day.id)}
+            onMoveUp={i > 0 ? () => swapDays(i, -1) : undefined}
+            onMoveDown={i < (days?.length ?? 0) - 1 ? () => swapDays(i, 1) : undefined}
+          />
         ))}
       </div>
 
@@ -211,7 +229,10 @@ function RoutineEditor({ routine }: { routine: Routine }) {
 
 // ── Day section ───────────────────────────────────────────────────────────────
 
-function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }) {
+function DaySection({ day, onDelete, onMoveUp, onMoveDown }: {
+  day: RoutineDay; onDelete: () => void
+  onMoveUp?: () => void; onMoveDown?: () => void
+}) {
   const rdes = useLiveQuery(
     () => db.routine_day_exercises.filter((r) => r.routine_day_id === day.id && !r.deleted_at).sortBy('position'),
     [day.id]
@@ -312,6 +333,10 @@ function DaySection({ day, onDelete }: { day: RoutineDay; onDelete: () => void }
                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
               </svg>
             </button>
+            <button onClick={onMoveUp} disabled={!onMoveUp}
+              className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs px-1 transition-colors">▲</button>
+            <button onClick={onMoveDown} disabled={!onMoveDown}
+              className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs px-1 transition-colors">▼</button>
             <DeleteButton onConfirm={onDelete} size="sm" />
           </>
         )}
