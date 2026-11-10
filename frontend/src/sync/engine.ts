@@ -23,15 +23,6 @@ export async function syncPush(): Promise<number> {
   const entries = await db.outbox.orderBy('ts').toArray()
   if (entries.length === 0) return 0
 
-  const seEntries = entries.filter((e) => e.table === 'session_exercises')
-  console.log('[push] outbox total:', entries.length,
-    'session_exercises:', seEntries.map((e) => ({
-      id: e.record_id.slice(0, 8),
-      session_id: ((e.payload as Record<string, unknown>).session_id as string | undefined)?.slice(0, 8),
-      deleted_at: (e.payload as Record<string, unknown>).deleted_at,
-    }))
-  )
-
   const resp = await apiFetch<PushResponse>('/sync/push', {
     method: 'POST',
     body: JSON.stringify({
@@ -44,7 +35,6 @@ export async function syncPush(): Promise<number> {
     }),
   })
 
-  console.log('[push] respuesta:', resp.applied, 'applied, errores:', resp.errors)
   await db.outbox.bulkDelete(entries.map((e) => e.id!))
 
   if (resp.errors.length > 0) {
@@ -62,14 +52,6 @@ export async function syncPull(): Promise<void> {
   const since = localStorage.getItem(PULL_KEY)
   const url = since ? `/sync/pull?since=${encodeURIComponent(since)}` : '/sync/pull'
   const data = await apiFetch<PullResponse>(url)
-
-  console.log('[pull] session_exercises recibidos del servidor:', data.session_exercises.length,
-    data.session_exercises.map((se: Record<string, unknown>) => ({
-      id: (se.id as string)?.slice(0, 8),
-      session_id: (se.session_id as string)?.slice(0, 8),
-      deleted_at: se.deleted_at,
-    }))
-  )
 
   await db.transaction('rw', [
     db.exercises,

@@ -78,18 +78,6 @@ def sync_push(
     applied = 0
     errors: list[str] = []
 
-    # Debug temporal: log cambios recibidos
-    for tbl in ("sessions", "session_exercises", "sets"):
-        rows = [c for c in body.changes if c.table == tbl]
-        if rows:
-            print(
-                f"[sync_push] {tbl} ({len(rows)}): "
-                + ", ".join(
-                    f"{c.record_id[:8]}(del={c.payload.get('deleted_at')},upd={str(c.payload.get('updated_at',''))[:19]})"
-                    for c in rows
-                )
-            )
-
     # Orden topológico: padres antes que hijos para no violar FKs durante el flush
     sorted_changes = sorted(
         body.changes,
@@ -145,12 +133,7 @@ def sync_push(
             applied += 1
 
         except Exception as exc:  # noqa: BLE001
-            if change.table in ("session_exercises", "routine_day_exercises"):
-                ex_id = payload.get("exercise_id", "?")
-                print(f"[sync_push] FK on {change.table}/{change.record_id[:8]} exercise_id={ex_id}")
-                errors.append(f"FK: exercise_id={ex_id} no existe en exercises ({change.table}/{change.record_id[:8]})")
-            else:
-                errors.append(f"{change.table}/{change.record_id}: {exc!s}")
+            errors.append(f"{change.table}/{change.record_id}: {exc!s}")
 
     try:
         db.commit()
