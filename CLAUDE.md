@@ -199,9 +199,8 @@ Cada fase termina con: tests pasando, app ejecutable en local y actualización d
 - UI optimizada para pantalla ancha: tablas en lugar de tarjetas móviles.
 - Secciones:
   - **Catálogo**: tabla de ejercicios con edición inline de todos los campos + botón importar desde `exercises.json`.
-  - **Estadísticas globales**: volumen total por usuario y por semana, e1RM por ejercicio, sesiones en los últimos 30 días.
-  - **Usuarios**: lista de perfiles registrados, fecha de última sesión.
-- Nuevos endpoints FastAPI necesarios: `GET /admin/stats` (requiere `admin_user_id` en config), `GET /admin/users`.
+  - **Estadísticas globales**: volumen total por semana, e1RM por ejercicio, sesiones en los últimos 30 días.
+- Nuevo endpoint FastAPI necesario: `GET /admin/stats` (requiere `admin_user_id` en config).
 - No requiere despliegue separado: se sirve desde Cloudflare Pages en la misma URL.
 - ✅ Hecho cuando: Valentin puede editar el catálogo y ver estadísticas desde el navegador del PC.
 
@@ -299,12 +298,17 @@ VITE_API_URL=http://localhost:8000
 
 ## Estado actual
 
-- Fase: **7 completa + 8 completa + mejoras post-deploy**
-- Último cambio (2026-11-03):
-  - Catálogo ampliado a **26 ejercicios** (12 nuevos desde fotos: curl femoral sentado, hack squat, mancuernas, sentadilla con barra, press inclinado, bench press, press cables, crunch abdominal, extensión lumbares, remo sentado Cybex Eagle, fondos asistidos, dominadas asistidas).
-  - Eliminación en toda la app: rutinas (con cascade a días/ejercicios), días, ejercicios de día, ejercicios de sesión activa, sesiones completas desde Progreso — todo con soft-delete + outbox.
-  - Fase 9 (Admin) definida en el roadmap.
-- Siguiente paso: **Fase 4** (sincronización automática: pull periódico, reintentos con backoff) o **Fase 5** (gráficos de progreso con Recharts) o **Fase 9** (panel admin escritorio).
+- Fase: **7 + 8 completas + mejoras post-deploy + Perfil**
+- Último cambio (2026-11-10):
+  - **Perfil**: pantalla nueva (tab 👤) con datos personales (nombre, altura, fecha nacimiento, sexo, objetivo) y mediciones corporales con historial y mini gráfico de peso.
+  - `body_metrics` table (backend + Dexie v3) con sync LWW completo.
+  - Migración Alembic `c3e7a1f2d4b8` aplicada automáticamente al arrancar el backend (FastAPI lifespan).
+  - Start Command de Render: `uv run --active python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Pendientes (por orden de prioridad):**
+  1. **Fase 6** — Sugerencia de progresión al empezar sesión.
+  2. **Calculador de calorías** por sesión (MET × peso × duración), visible en Progreso.
+  3. **Gráficos de métricas corporales en Progreso** (peso, % grasa, cintura a lo largo del tiempo).
+  4. **Fase 9 Admin** — estadísticas globales (`GET /admin/stats`); catálogo ya funciona.
 
 ### Notas de la Fase 0
 - En Windows, uvicorn y pytest deben lanzarse como módulo Python: `uv run python -m uvicorn ...` / `uv run python -m pytest`
