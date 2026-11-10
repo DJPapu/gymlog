@@ -14,6 +14,7 @@ export default function AdminCatalogo() {
   const exercises = useLiveQuery(() => db.exercises.filter((e) => !e.deleted_at).sortBy('name'), [])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [pushing, setPushing] = useState(false)
 
   const filtered = exercises?.filter(
     (ex) =>
@@ -21,12 +22,41 @@ export default function AdminCatalogo() {
       (ex.primary_muscle ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
+  async function pushAllExercises() {
+    if (!exercises || exercises.length === 0) return
+    setPushing(true)
+    try {
+      const now = new Date().toISOString()
+      await db.transaction('rw', [db.outbox], async () => {
+        for (const ex of exercises) {
+          await db.outbox.add({
+            table: 'exercises',
+            record_id: ex.id,
+            op: 'upsert',
+            payload: { ...ex, updated_at: now },
+            ts: now,
+          })
+        }
+      })
+    } finally {
+      setPushing(false)
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <h2 className="text-gray-900 font-bold text-lg">Catálogo de ejercicios</h2>
           <span className="text-gray-400 text-sm">{exercises?.length ?? 0} ejercicios</span>
+          <button
+            onClick={pushAllExercises}
+            disabled={pushing}
+            title="Envía todos los ejercicios del catálogo local al servidor"
+            className="text-xs text-indigo-600 hover:text-indigo-500 disabled:opacity-40 border border-indigo-200 rounded px-2 py-0.5"
+          >
+            {pushing ? 'Añadiendo…' : '⬆ Push catálogo al servidor'}
+          </button>
         </div>
         <input
           type="search"
