@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { db, type Exercise, type Routine, type RoutineDay, type RoutineDayExercise } from '../db/schema'
 import { useAuth } from '../lib/auth'
 import { apiFetch } from '../lib/api'
@@ -267,19 +267,7 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
   const [editRepMax, setEditRepMax] = useState(12)
   const [editTargetWeight, setEditTargetWeight] = useState('')
 
-  const [dragging, setDragging] = useState<number | null>(null)
-  const [dragOver, setDragOver] = useState<number | null>(null)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
-
-  const displayedRdes = useMemo(() => {
-    if (!rdes) return []
-    if (dragging === null || dragOver === null || dragging === dragOver) return rdes
-    const arr = [...rdes]
-    const [moved] = arr.splice(dragging, 1)
-    arr.splice(dragOver, 0, moved)
-    return arr
-  }, [rdes, dragging, dragOver])
 
   const exMap: Record<string, Exercise> = exercises ? Object.fromEntries(exercises.map((e: Exercise) => [e.id, e])) : {}
 
@@ -353,54 +341,16 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
     setEditingRDE(null)
   }
 
-  function handleDragPointerDown(e: React.PointerEvent, index: number) {
-    e.preventDefault()
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    setDragging(index)
-    setDragOver(index)
-    setDraggingId(rdes?.[index]?.id ?? null)
-  }
-
-  function handleDragPointerMove(e: React.PointerEvent) {
-    if (dragging === null) return
-    const y = e.clientY
-    for (let i = 0; i < itemRefs.current.length; i++) {
-      const el = itemRefs.current[i]
-      if (!el) continue
-      const rect = el.getBoundingClientRect()
-      if (y >= rect.top && y < rect.bottom) {
-        if (dragOver !== i) setDragOver(i)
-        break
-      }
-    }
-  }
-
-  async function handleDragPointerUp() {
-    const from = dragging
-    const to = dragOver
-    setDragging(null)
-    setDragOver(null)
-    setDraggingId(null)
-
-    if (from !== null && to !== null && from !== to) {
-      const arr = [...(rdes ?? [])]
-      const [moved] = arr.splice(from, 1)
-      arr.splice(to, 0, moved)
-      const now = new Date().toISOString()
-      for (let i = 0; i < arr.length; i++) {
-        if (arr[i].position !== i) {
-          const item = arr[i]
-          await db.routine_day_exercises.update(item.id, { position: i, updated_at: now })
-          await db.outbox.add({
-            table: 'routine_day_exercises',
-            record_id: item.id,
-            op: 'upsert',
-            payload: { ...item, position: i, updated_at: now },
-            ts: now,
-          })
-        }
-      }
-    }
+  async function swapExercises(i: number, dir: -1 | 1) {
+    if (!rdes) return
+    const j = i + dir
+    if (j < 0 || j >= rdes.length) return
+    const a = rdes[i], b = rdes[j]
+    const now = new Date().toISOString()
+    await db.routine_day_exercises.update(a.id, { position: b.position, updated_at: now })
+    await db.outbox.add({ table: 'routine_day_exercises', record_id: a.id, op: 'upsert', payload: { ...a, position: b.position, updated_at: now }, ts: now })
+    await db.routine_day_exercises.update(b.id, { position: a.position, updated_at: now })
+    await db.outbox.add({ table: 'routine_day_exercises', record_id: b.id, op: 'upsert', payload: { ...b, position: a.position, updated_at: now }, ts: now })
   }
 
   return (
@@ -446,7 +396,7 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
 
       {open && (
         <div className="px-3 pb-3 space-y-1.5 border-t border-gray-100 pt-2">
-          {displayedRdes.map((rde: RoutineDayExercise, index: number) => {
+          {rdes?.map((rde: RoutineDayExercise, index: number) => {
             const ex = exMap[rde.exercise_id]
             if (!ex) return null
             if (editingRDE === rde.id) {
@@ -485,7 +435,7 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
               <div
                 key={rde.id}
                 ref={(el) => { itemRefs.current[index] = el }}
-                className={`bg-slate-50 rounded-lg border border-gray-100 px-3 py-2 flex items-center gap-1.5 transition-opacity ${rde.id === draggingId ? 'opacity-50 ring-1 ring-indigo-500' : ''}`}
+                className="bg-slate-50 rounded-lg border border-gray-100 px-3 py-2 flex items-center gap-1.5"
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-gray-900 text-xs font-medium">{ex.name}</p>
@@ -502,20 +452,11 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                   </svg>
                 </button>
+                <button onClick={() => swapExercises(index, -1)} disabled={index === 0}
+                  className="text-gray-300 hover:text-gray-600 disabled:opacity-20 flex items-center justify-center min-w-[28px] min-h-[36px] text-xs shrink-0">▲</button>
+                <button onClick={() => swapExercises(index, 1)} disabled={index === (rdes?.length ?? 0) - 1}
+                  className="text-gray-300 hover:text-gray-600 disabled:opacity-20 flex items-center justify-center min-w-[28px] min-h-[36px] text-xs shrink-0">▼</button>
                 <DeleteButton onConfirm={() => deleteRDE(rde.id)} size="sm" />
-                <div
-                  className="touch-none select-none text-gray-300 hover:text-gray-500 flex items-center justify-center min-w-[36px] min-h-[44px] shrink-0 cursor-grab active:cursor-grabbing"
-                  onPointerDown={(e) => handleDragPointerDown(e, index)}
-                  onPointerMove={handleDragPointerMove}
-                  onPointerUp={handleDragPointerUp}
-                  onPointerCancel={() => { setDragging(null); setDragOver(null); setDraggingId(null) }}
-                >
-                  <svg viewBox="0 0 10 16" fill="currentColor" className="w-3 h-4">
-                    <circle cx="2" cy="2" r="1.5" /><circle cx="8" cy="2" r="1.5" />
-                    <circle cx="2" cy="8" r="1.5" /><circle cx="8" cy="8" r="1.5" />
-                    <circle cx="2" cy="14" r="1.5" /><circle cx="8" cy="14" r="1.5" />
-                  </svg>
-                </div>
               </div>
             )
           })}
