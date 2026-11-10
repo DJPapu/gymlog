@@ -5,6 +5,7 @@ const tabs = [
   { to: '/rutinas', label: 'Rutinas', icon: '📋' },
   { to: '/ejercicios', label: 'Ejercicios', icon: '💪' },
   { to: '/progreso', label: 'Progreso', icon: '📈' },
+  { to: '/perfil', label: 'Perfil', icon: '👤' },
 ]
 
 export default function BottomNav() {

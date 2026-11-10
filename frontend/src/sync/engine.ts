@@ -16,6 +16,8 @@ interface PullResponse {
   sessions: Record<string, unknown>[]
   session_exercises: Record<string, unknown>[]
   sets: Record<string, unknown>[]
+  profiles: Record<string, unknown>[]
+  body_metrics: Record<string, unknown>[]
   pulled_at: string
 }
 
@@ -61,6 +63,8 @@ export async function syncPull(): Promise<void> {
     db.sessions,
     db.session_exercises,
     db.sets,
+    db.profiles,
+    db.body_metrics,
   ], async () => {
     for (const r of data.exercises)           await db.exercises.put(r as never)
     for (const r of data.routines)            await db.routines.put(r as never)
@@ -69,6 +73,8 @@ export async function syncPull(): Promise<void> {
     for (const r of data.sessions)            await db.sessions.put(r as never)
     for (const r of data.session_exercises)   await db.session_exercises.put(r as never)
     for (const r of data.sets)                await db.sets.put(r as never)
+    for (const r of (data.profiles ?? []))    await db.profiles.put(r as never)
+    for (const r of (data.body_metrics ?? [])) await db.body_metrics.put(r as never)
   })
 
   localStorage.setItem(PULL_KEY, data.pulled_at)

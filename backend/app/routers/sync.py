@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser
 from app.db import get_db
 from app.models import (
+    BodyMetric,
     Exercise,
+    Profile,
     Routine,
     RoutineDay,
     RoutineDayExercise,
@@ -28,18 +30,22 @@ _TABLE_MAP = {
     "sessions": SessionModel,
     "session_exercises": SessionExercise,
     "sets": Set,
+    "profiles": Profile,
+    "body_metrics": BodyMetric,
 }
 
 # Tablas cuyo user_id debe forzarse desde el JWT
-_USER_ID_TABLES = {"routines", "sessions"}
+_USER_ID_TABLES = {"routines", "sessions", "body_metrics", "profiles"}
 
 # Orden topológico para satisfacer FKs: padres antes que hijos.
 # Sin relationship() en los modelos SQLAlchemy no puede deducirlo solo.
 _TABLE_ORDER = {
     "exercises": 0,
+    "profiles": 0,
     "routines": 1,
     "routine_days": 2,
     "sessions": 2,
+    "body_metrics": 2,
     "routine_day_exercises": 3,
     "session_exercises": 3,
     "sets": 4,
@@ -53,6 +59,17 @@ def _parse_dt(value: Any) -> datetime | None:
         return value
     try:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_date(value: Any) -> date | None:
+    if not value:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
     except (ValueError, TypeError):
         return None
 
@@ -98,9 +115,12 @@ def sync_push(
                 payload["user_id"] = user_id
 
             # Convertir cadenas de fecha/hora a datetime
-            for field in ("updated_at", "deleted_at", "started_at", "ended_at"):
+            for field in ("updated_at", "deleted_at", "started_at", "ended_at", "measured_at"):
                 if field in payload:
                     payload[field] = _parse_dt(payload[field])
+            # birth_date es date (no datetime)
+            if "birth_date" in payload:
+                payload["birth_date"] = _parse_date(payload["birth_date"])
 
             # Savepoint por cambio: un error no contamina el resto de la sesión
             with db.begin_nested():
@@ -185,5 +205,7 @@ def sync_pull(
         sessions=fetch(SessionModel, SessionModel.user_id == user_id),
         session_exercises=fetch(SessionExercise, SessionExercise.session_id.in_(session_ids)) if session_ids else [],
         sets=fetch(Set, Set.session_exercise_id.in_(se_ids)) if se_ids else [],
+        profiles=fetch(Profile, Profile.user_id == user_id),
+        body_metrics=fetch(BodyMetric, BodyMetric.user_id == user_id),
         pulled_at=pulled_at,
     )

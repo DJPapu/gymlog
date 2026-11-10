@@ -92,6 +92,30 @@ export interface SetRecord {
   deleted_at: string | null
 }
 
+export interface Profile {
+  user_id: string
+  display_name: string | null
+  units: string
+  height_cm: number | null
+  birth_date: string | null
+  sex: 'male' | 'female' | 'other' | null
+  goal: 'lose_fat' | 'gain_muscle' | 'maintain' | 'performance' | null
+  updated_at: string
+  deleted_at: string | null
+}
+
+export interface BodyMetric {
+  id: string
+  user_id: string
+  measured_at: string
+  weight_kg: number | null
+  body_fat_pct: number | null
+  waist_cm: number | null
+  notes: string | null
+  updated_at: string
+  deleted_at: string | null
+}
+
 export interface OutboxEntry {
   id?: number
   table: string
@@ -111,6 +135,8 @@ export class GymLogDB extends Dexie {
   sessions!: EntityTable<Session, 'id'>
   session_exercises!: EntityTable<SessionExercise, 'id'>
   sets!: EntityTable<SetRecord, 'id'>
+  profiles!: EntityTable<Profile, 'user_id'>
+  body_metrics!: EntityTable<BodyMetric, 'id'>
   outbox!: EntityTable<OutboxEntry, 'id'>
 
   constructor() {
@@ -124,6 +150,10 @@ export class GymLogDB extends Dexie {
       session_exercises: 'id, session_id, exercise_id, updated_at',
       sets: 'id, session_exercise_id, set_index, updated_at',
       outbox: '++id, table, record_id, ts',
+    })
+    this.version(3).stores({
+      profiles: 'user_id, updated_at',
+      body_metrics: 'id, user_id, measured_at, updated_at',
     })
   }
 }
