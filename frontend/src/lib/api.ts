@@ -1,5 +1,3 @@
-import { supabase } from './supabase'
-
 // URL directa del backend en Render (sólo para diagnóstico / wake button UI).
 export const BACKEND_ORIGIN = 'https://gymlog-5y6y.onrender.com'
 
@@ -9,10 +7,10 @@ const API_URL = import.meta.env.DEV
   ? (import.meta.env.VITE_API_URL as string | undefined ?? `http://${window.location.hostname}:8000`)
   : '/api'
 
-async function getAuthHeaders(method = 'GET'): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
-  const token = data.session?.access_token ?? 'dev-local-user'
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
+const API_SECRET = (import.meta.env.VITE_API_SECRET as string | undefined) ?? 'dev-local-user'
+
+function getAuthHeaders(method = 'GET'): Record<string, string> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${API_SECRET}` }
   if (method !== 'GET') headers['Content-Type'] = 'application/json'
   return headers
 }
@@ -26,7 +24,7 @@ export function wakeUpBackend(): void {
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase()
-  const headers = await getAuthHeaders(method)
+  const headers = getAuthHeaders(method)
   const url = `${API_URL}${path}`
 
   const controller = new AbortController()

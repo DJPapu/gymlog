@@ -3,18 +3,13 @@ import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'r
 import BottomNav from './components/BottomNav'
 import SplashScreen from './components/SplashScreen'
 import SyncBadge from './components/SyncBadge'
-import { useAuth } from './lib/auth'
 import AdminApp from './pages/admin/AdminApp'
 import Ejercicios from './pages/Ejercicios'
 import Hoy from './pages/Hoy'
-import Login from './pages/Login'
 import Progreso from './pages/Progreso'
 import Rutinas from './pages/Rutinas'
 import Sesion from './pages/Sesion'
 import { useSyncStatus } from './sync/useSyncStatus'
-
-// En dev (VITE_SUPABASE_URL = placeholder) se salta el login
-const AUTH_REQUIRED = !import.meta.env.VITE_SUPABASE_URL?.includes('placeholder')
 
 function MobileShell() {
   const location = useLocation()
@@ -44,20 +39,7 @@ function MobileShell() {
 }
 
 export default function App() {
-  const { loading, session } = useAuth()
   const [showSplash, setShowSplash] = useState(true)
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  if (AUTH_REQUIRED && !session) {
-    return <Login />
-  }
 
   return (
     <Router>

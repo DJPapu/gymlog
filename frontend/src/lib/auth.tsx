@@ -1,37 +1,22 @@
-import { type Session, type User } from '@supabase/supabase-js'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { supabase } from './supabase'
+import type { User } from '@supabase/supabase-js'
+import { createContext, useContext, type ReactNode } from 'react'
 
 interface AuthCtx {
-  user: User | null
-  session: Session | null
+  user: User
+  session: null
   loading: boolean
 }
 
-const AuthContext = createContext<AuthCtx>({ user: null, session: null, loading: true })
+const FIXED_USER = {
+  id: import.meta.env.VITE_USER_ID ?? 'local-user-dev',
+  user_metadata: { full_name: (import.meta.env.VITE_USER_NAME as string | undefined) ?? 'Valentin' },
+} as unknown as User
 
-// Usuario local para desarrollo sin Supabase configurado
-const LOCAL_USER = { id: 'local-user-dev' } as User
+const AuthContext = createContext<AuthCtx>({ user: FIXED_USER, session: null, loading: false })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data }) => setSession(data.session))
-      .catch(() => {/* no hay sesión guardada */})
-      .finally(() => setLoading(false))
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s)
-    })
-    return () => listener.subscription.unsubscribe()
-  }, [])
-
-  const user = session?.user ?? LOCAL_USER
-
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider value={{ user: FIXED_USER, session: null, loading: false }}>
       {children}
     </AuthContext.Provider>
   )

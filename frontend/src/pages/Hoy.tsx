@@ -78,9 +78,14 @@ export default function Hoy() {
       ? days.find((d) => d.id === lastSession.routine_day_id)
       : undefined
 
+  const name = user?.user_metadata?.full_name as string | undefined
+
   return (
     <div className="flex flex-col h-full px-4 pt-6 pb-4 space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Hoy</h2>
+      <div>
+        <p className="text-sm text-gray-400">¡Hola, {name ?? 'Valentin'}!</p>
+        <h2 className="text-2xl font-bold text-gray-900">Hoy</h2>
+      </div>
 
       {programExpired && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-start gap-3">
