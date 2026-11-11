@@ -24,6 +24,15 @@ export default function Hoy() {
     [activeRoutine?.id],
   )
 
+  // Sesión en curso (sin ended_at) — puede existir si la app se cerró a mitad
+  const sessionInProgress = useLiveQuery(
+    () =>
+      db.sessions
+        .filter((s) => s.user_id === (user?.id ?? '') && !s.ended_at && !s.deleted_at)
+        .first(),
+    [user?.id],
+  )
+
   const lastSession = useLiveQuery(
     () =>
       db.sessions
@@ -97,6 +106,28 @@ export default function Hoy() {
             </p>
           </div>
         </div>
+      )}
+
+      {/* Banner de sesión en curso — aparece si la app se cerró a mitad de sesión */}
+      {sessionInProgress && (
+        <button
+          onClick={() => navigate(`/sesion/${sessionInProgress.id}`)}
+          className="w-full bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 flex items-center gap-3 text-left"
+        >
+          <span className="text-2xl">⏱️</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-800 font-semibold text-sm">Sesión en curso</p>
+            <p className="text-amber-600 text-xs mt-0.5">
+              Iniciada a las{' '}
+              {new Date(sessionInProgress.started_at).toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              {' · '}Toca para continuar
+            </p>
+          </div>
+          <span className="text-amber-400 text-lg">▶</span>
+        </button>
       )}
 
       {activeRoutine === undefined || days === undefined ? (
