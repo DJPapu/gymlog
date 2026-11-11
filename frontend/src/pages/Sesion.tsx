@@ -85,7 +85,7 @@ export default function Sesion() {
     setTimeout(() => navigate('/'), 2600)
   }
 
-  if (!session || session.ended_at) {
+  if (!session) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-gray-400">Sesión no encontrada</p>
@@ -93,34 +93,47 @@ export default function Sesion() {
     )
   }
 
+  const isEditing = !!session.ended_at
+
   return (
     <div className="flex flex-col h-full">
       {showCelebration && <CelebrationOverlay />}
       <header className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-200">
-        <button onClick={() => navigate('/')} className="text-gray-500 text-sm min-h-[44px] px-2">
+        <button onClick={() => navigate(isEditing ? '/progreso' : '/')} className="text-gray-500 text-sm min-h-[44px] px-2">
           ← Atrás
         </button>
         <div className="text-center">
-          <h2 className="text-base font-bold text-gray-900">Sesión en curso</h2>
-          {lastSaved && (
+          <h2 className="text-base font-bold text-gray-900">
+            {isEditing ? 'Editando sesión' : 'Sesión en curso'}
+          </h2>
+          {!isEditing && lastSaved && (
             <p className="text-xs text-gray-400">
               Guardado {lastSaved.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
+          {isEditing && (
+            <p className="text-xs text-gray-400">
+              {new Date(session.started_at).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </p>
+          )}
         </div>
-        <button
-          onClick={finishSession}
-          disabled={finishing}
-          className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-xl min-h-[44px]"
-        >
-          {finishing ? '...' : 'Terminar'}
-        </button>
+        {isEditing ? (
+          <div className="w-16" />
+        ) : (
+          <button
+            onClick={finishSession}
+            disabled={finishing}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-xl min-h-[44px]"
+          >
+            {finishing ? '...' : 'Terminar'}
+          </button>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 pb-6">
         {sessionExercises === undefined && <p className="text-gray-400 text-sm">Cargando...</p>}
         {sessionExercises?.map((se: SessionExercise) => (
-          <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} routineDayId={session.routine_day_id ?? null} />
+          <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} routineDayId={session.routine_day_id ?? null} isEditing={isEditing} />
         ))}
       </div>
     </div>
@@ -129,7 +142,7 @@ export default function Sesion() {
 
 // ── Tarjeta de ejercicio ────────────────────────────────────────────────────
 
-function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessionExercise: SessionExercise; sessionId: string; routineDayId: string | null }) {
+function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing }: { sessionExercise: SessionExercise; sessionId: string; routineDayId: string | null; isEditing: boolean }) {
   const sets = useLiveQuery(
     () =>
       db.sets
@@ -160,7 +173,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
   }, [se.exercise_id, sessionId])
 
   useEffect(() => {
-    if (!exercise || !rde) return
+    if (!exercise || !rde || isEditing) return
     getExerciseHistory(se.exercise_id, 3, sessionId).then((history) => {
       setSuggestion(suggestProgression(
         {
@@ -173,7 +186,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
         history,
       ))
     })
-  }, [se.exercise_id, sessionId, exercise?.id, rde?.id])
+  }, [se.exercise_id, sessionId, exercise?.id, rde?.id, isEditing])
 
   const completedCount = sets?.filter((s) => s.completed).length ?? 0
   const totalCount = sets?.length ?? 0
@@ -333,8 +346,8 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId }: { sessio
         </div>
       </div>
 
-      {/* Sugerencia de actualizar objetivo */}
-      {updatePrompt && (
+      {/* Sugerencia de actualizar objetivo (solo en sesión activa) */}
+      {!isEditing && updatePrompt && (
         <div className="px-4 pb-4 pt-3 border-t border-indigo-100 bg-indigo-50">
           <p className="text-indigo-700 text-xs mb-3 leading-relaxed">
             {updatePrompt.direction === 'up'

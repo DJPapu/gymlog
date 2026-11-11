@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Bar, BarChart, ReferenceLine, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
@@ -60,6 +61,7 @@ export default function Progreso() {
 function SessionCard({ session, dayName }: { session: Session; dayName?: string }) {
   const [expanded, setExpanded] = useState(false)
   const [resyncing, setResyncing] = useState(false)
+  const navigate = useNavigate()
 
   async function resyncSession() {
     setResyncing(true)
@@ -154,6 +156,13 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
           </div>
         </button>
         <div className="pt-3 pr-2 shrink-0 flex items-center gap-1">
+          <button
+            onClick={() => navigate(`/sesion/${session.id}`)}
+            title="Editar sesión"
+            className="text-gray-300 hover:text-indigo-500 text-base px-1 min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
+          >
+            ✏️
+          </button>
           <button
             onClick={resyncSession}
             disabled={resyncing}
