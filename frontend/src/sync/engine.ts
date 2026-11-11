@@ -66,15 +66,54 @@ export async function syncPull(): Promise<void> {
     db.profiles,
     db.body_metrics,
   ], async () => {
-    for (const r of data.exercises)           await db.exercises.put(r as never)
-    for (const r of data.routines)            await db.routines.put(r as never)
-    for (const r of data.routine_days)        await db.routine_days.put(r as never)
-    for (const r of data.routine_day_exercises) await db.routine_day_exercises.put(r as never)
-    for (const r of data.sessions)            await db.sessions.put(r as never)
-    for (const r of data.session_exercises)   await db.session_exercises.put(r as never)
-    for (const r of data.sets)                await db.sets.put(r as never)
-    for (const r of (data.profiles ?? []))    await db.profiles.put(r as never)
-    for (const r of (data.body_metrics ?? [])) await db.body_metrics.put(r as never)
+    // LWW en el pull: solo sobreescribir si el servidor tiene un updated_at más reciente
+    // que el registro local. Evita que un pull ciegamente revierta cambios locales que
+    // aún no se han empujado al servidor (p.ej. ended_at de una sesión recién terminada).
+    for (const r of data.exercises) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.exercises.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.exercises.put(r as never)
+    }
+    for (const r of data.routines) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.routines.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.routines.put(r as never)
+    }
+    for (const r of data.routine_days) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.routine_days.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.routine_days.put(r as never)
+    }
+    for (const r of data.routine_day_exercises) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.routine_day_exercises.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.routine_day_exercises.put(r as never)
+    }
+    for (const r of data.sessions) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.sessions.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.sessions.put(r as never)
+    }
+    for (const r of data.session_exercises) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.session_exercises.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.session_exercises.put(r as never)
+    }
+    for (const r of data.sets) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.sets.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.sets.put(r as never)
+    }
+    for (const r of (data.profiles ?? [])) {
+      const rec = r as { user_id: string; updated_at: string }
+      const local = await db.profiles.get(rec.user_id)
+      if (!local || rec.updated_at > local.updated_at) await db.profiles.put(r as never)
+    }
+    for (const r of (data.body_metrics ?? [])) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.body_metrics.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.body_metrics.put(r as never)
+    }
   })
 
   localStorage.setItem(PULL_KEY, data.pulled_at)
