@@ -131,10 +131,70 @@ export default function Sesion() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 pb-6">
+        {isEditing && <SessionTimesEditor session={session} />}
         {sessionExercises === undefined && <p className="text-gray-400 text-sm">Cargando...</p>}
         {sessionExercises?.map((se: SessionExercise) => (
           <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} routineDayId={session.routine_day_id ?? null} isEditing={isEditing} />
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Editor de tiempos de sesión (modo edición) ─────────────────────────────
+
+function SessionTimesEditor({ session }: { session: { id: string; started_at: string; ended_at: string | null; updated_at: string } }) {
+  function toLocalInput(iso: string) {
+    const d = new Date(iso)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  async function updateTime(field: 'started_at' | 'ended_at', localValue: string) {
+    if (!localValue) return
+    const iso = new Date(localValue).toISOString()
+    const now = new Date().toISOString()
+    await db.sessions.update(session.id, { [field]: iso, updated_at: now })
+    await db.outbox.add({
+      table: 'sessions',
+      record_id: session.id,
+      op: 'upsert',
+      payload: { ...session, [field]: iso, updated_at: now },
+      ts: now,
+    })
+  }
+
+  const durationMin = session.ended_at
+    ? Math.round((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60_000)
+    : null
+
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-gray-700">Tiempos de la sesión</h4>
+        {durationMin != null && (
+          <span className="text-xs text-gray-400">{durationMin} min en total</span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs text-gray-500">Inicio</label>
+          <input
+            type="datetime-local"
+            defaultValue={toLocalInput(session.started_at)}
+            onChange={(e) => updateTime('started_at', e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-gray-500">Fin</label>
+          <input
+            type="datetime-local"
+            defaultValue={session.ended_at ? toLocalInput(session.ended_at) : ''}
+            onChange={(e) => updateTime('ended_at', e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
       </div>
     </div>
   )
