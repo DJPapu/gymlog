@@ -19,13 +19,38 @@ const BLANK: Omit<Exercise, 'id' | 'created_by' | 'updated_at' | 'deleted_at'> =
   weight_increment_kg: 2.5, default_rep_range: '8-12', setup_tips: null, photo_ref: null,
 }
 
+function resizeImage(file: File, maxPx = 600, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('No se pudo cargar la imagen')) }
+    img.src = objectUrl
+  })
+}
+
+function photoSrc(ref: string | null): string | null {
+  if (!ref) return null
+  return ref.startsWith('data:') ? ref : `/${ref}`
+}
+
 export default function Ejercicios() {
   const exercises = useLiveQuery(
     () => db.exercises.filter((e) => !e.deleted_at).sortBy('name'),
     []
   )
   const [showForm, setShowForm] = useState(false)
+  const [editingExercise, setEditingExercise] = useState<Exercise | null>(null)
   const [form, setForm] = useState({ ...BLANK })
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,25 +58,85 @@ export default function Ejercicios() {
     setForm((f) => ({ ...f, [k]: v }))
   }
 
+  function closeForm() {
+    setForm({ ...BLANK })
+    setPhotoDataUrl(null)
+    setEditingExercise(null)
+    setShowForm(false)
+    setError(null)
+  }
+
+  function openCreate() {
+    setForm({ ...BLANK })
+    setPhotoDataUrl(null)
+    setEditingExercise(null)
+    setShowForm(true)
+  }
+
+  function openEdit(ex: Exercise) {
+    setForm({
+      name: ex.name,
+      machine_name: ex.machine_name,
+      equipment: ex.equipment,
+      primary_muscle: ex.primary_muscle,
+      secondary_muscles: ex.secondary_muscles,
+      movement_pattern: ex.movement_pattern,
+      unilateral: ex.unilateral,
+      weight_increment_kg: ex.weight_increment_kg,
+      default_rep_range: ex.default_rep_range,
+      setup_tips: ex.setup_tips,
+      photo_ref: ex.photo_ref,
+    })
+    setPhotoDataUrl(null)
+    setEditingExercise(ex)
+    setShowForm(true)
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setPhotoDataUrl(await resizeImage(file))
+    } catch {
+      setError('No se pudo procesar la foto')
+    }
+    // Reset input so the same file can be picked again if needed
+    e.target.value = ''
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
     try {
-      const id = crypto.randomUUID()
       const now = new Date().toISOString()
-      await db.exercises.add({ ...form, id, created_by: null, updated_at: now, deleted_at: null })
-      try {
-        const saved = await apiFetch<Exercise>('/exercises/', {
-          method: 'POST',
-          body: JSON.stringify({ ...form, id }),
+      const photoRef = photoDataUrl ?? form.photo_ref
+
+      if (editingExercise) {
+        const updates = { ...form, photo_ref: photoRef, updated_at: now }
+        await db.exercises.update(editingExercise.id, updates)
+        await db.outbox.add({
+          table: 'exercises',
+          record_id: editingExercise.id,
+          op: 'upsert',
+          payload: { ...editingExercise, ...updates },
+          ts: now,
         })
-        await db.exercises.update(id, { updated_at: saved.updated_at })
-      } catch {
-        await db.outbox.add({ table: 'exercises', record_id: id, op: 'upsert', payload: { ...form, id }, ts: now })
+      } else {
+        const id = crypto.randomUUID()
+        await db.exercises.add({ ...form, photo_ref: photoRef, id, created_by: null, updated_at: now, deleted_at: null })
+        try {
+          const saved = await apiFetch<Exercise>('/exercises/', {
+            method: 'POST',
+            body: JSON.stringify({ ...form, photo_ref: photoRef, id }),
+          })
+          await db.exercises.update(id, { updated_at: saved.updated_at })
+        } catch {
+          await db.outbox.add({ table: 'exercises', record_id: id, op: 'upsert', payload: { ...form, photo_ref: photoRef, id }, ts: now })
+        }
       }
-      setForm({ ...BLANK })
-      setShowForm(false)
+
+      closeForm()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
@@ -59,12 +144,14 @@ export default function Ejercicios() {
     }
   }
 
+  const photoPreview = photoDataUrl ?? photoSrc(form.photo_ref)
+
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-4 pt-4 pb-3">
         <h2 className="text-xl font-bold text-gray-900">Ejercicios</h2>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={openCreate}
           className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-xl min-h-[44px]"
         >
           + Nuevo
@@ -84,20 +171,52 @@ export default function Ejercicios() {
               {muscle}
             </h3>
             <div className="space-y-2">
-              {items.map((ex: Exercise) => <ExerciseCard key={ex.id} exercise={ex} />)}
+              {items.map((ex: Exercise) => (
+                <ExerciseCard key={ex.id} exercise={ex} onEdit={() => openEdit(ex)} />
+              ))}
             </div>
           </div>
         ))}
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={closeForm}>
           <div
-            className="bg-white rounded-t-2xl w-full max-h-[85vh] overflow-y-auto p-5 space-y-4"
+            className="bg-white rounded-t-2xl w-full max-h-[90vh] overflow-y-auto p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold text-gray-900">Nuevo ejercicio</h3>
+            <h3 className="text-lg font-bold text-gray-900">
+              {editingExercise ? 'Editar ejercicio' : 'Nuevo ejercicio'}
+            </h3>
             <form onSubmit={handleSave} className="space-y-3">
+              <Field label="Foto">
+                <div className="flex items-center gap-3">
+                  {photoPreview && (
+                    <img src={photoPreview} alt="" className="w-16 h-16 object-cover rounded-xl shrink-0" />
+                  )}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="cursor-pointer text-sm text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 px-4 py-2.5 rounded-xl min-h-[44px] flex items-center justify-center">
+                      {photoPreview ? 'Cambiar foto' : '+ Añadir foto'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handlePhotoChange}
+                      />
+                    </label>
+                    {photoDataUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setPhotoDataUrl(null)}
+                        className="text-xs text-gray-400 hover:text-red-500 text-center"
+                      >
+                        × Descartar cambio
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </Field>
+
               <Field label="Nombre">
                 <input
                   required
@@ -167,11 +286,11 @@ export default function Ejercicios() {
               </Field>
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowForm(false)} className={`${btnSecondary} flex-1`}>
+                <button type="button" onClick={closeForm} className={`${btnSecondary} flex-1`}>
                   Cancelar
                 </button>
                 <button type="submit" disabled={saving} className={`${btnPrimary} flex-1`}>
-                  {saving ? 'Guardando...' : 'Guardar'}
+                  {saving ? 'Guardando...' : (editingExercise ? 'Actualizar' : 'Guardar')}
                 </button>
               </div>
             </form>
@@ -182,17 +301,21 @@ export default function Ejercicios() {
   )
 }
 
-function ExerciseCard({ exercise: ex }: { exercise: Exercise }) {
+// ── Tarjeta de ejercicio ───────────────────────────────────────────────────
+
+function ExerciseCard({ exercise: ex, onEdit }: { exercise: Exercise; onEdit: () => void }) {
   const [showAdd, setShowAdd] = useState(false)
   const [lightbox, setLightbox] = useState(false)
   const [tipsExpanded, setTipsExpanded] = useState(false)
 
+  const src = photoSrc(ex.photo_ref)
+
   return (
     <>
       <div className="bg-white rounded-xl overflow-hidden flex items-stretch shadow-sm border border-gray-100">
-        {ex.photo_ref ? (
+        {src ? (
           <button onClick={() => setLightbox(true)} className="shrink-0 w-20 h-20 block">
-            <img src={`/${ex.photo_ref}`} alt={ex.name} className="w-20 h-20 object-cover" />
+            <img src={src} alt={ex.name} className="w-20 h-20 object-cover" />
           </button>
         ) : (
           <div className="w-20 h-20 bg-gray-50 shrink-0 flex items-center justify-center text-2xl text-gray-300">🏋️</div>
@@ -211,22 +334,31 @@ function ExerciseCard({ exercise: ex }: { exercise: Exercise }) {
             </button>
           )}
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-4 flex items-center justify-center text-indigo-600 hover:text-indigo-500 text-2xl font-light shrink-0"
-          aria-label="Añadir a rutina"
-        >
-          +
-        </button>
+        <div className="flex flex-col shrink-0 border-l border-gray-100 divide-y divide-gray-100">
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex-1 w-12 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 text-2xl font-light"
+            aria-label="Añadir a rutina"
+          >
+            +
+          </button>
+          <button
+            onClick={onEdit}
+            className="flex-1 w-12 flex items-center justify-center text-gray-400 hover:bg-gray-50 text-sm"
+            aria-label="Editar ejercicio"
+          >
+            ✏️
+          </button>
+        </div>
       </div>
 
-      {lightbox && ex.photo_ref && (
+      {lightbox && src && (
         <div
           className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4"
           onClick={() => setLightbox(false)}
         >
           <img
-            src={`/${ex.photo_ref}`}
+            src={src}
             alt={ex.name}
             className="max-w-full max-h-[70vh] object-contain rounded-xl"
           />
@@ -312,7 +444,7 @@ function AddToRoutineSheet({ exercise, onClose }: { exercise: Exercise; onClose:
 
         <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-gray-100">
           {exercise.photo_ref && (
-            <img src={`/${exercise.photo_ref}`} className="w-12 h-12 object-cover rounded-lg shrink-0" alt="" />
+            <img src={photoSrc(exercise.photo_ref)!} className="w-12 h-12 object-cover rounded-lg shrink-0" alt="" />
           )}
           <div>
             <p className="text-gray-900 text-sm font-medium">{exercise.name}</p>

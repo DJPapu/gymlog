@@ -197,17 +197,17 @@
   },
   {
     "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b15",
-    "name": "Curl femoral sentado",
-    "machine_name": "Life Fitness Seated Leg Curl",
+    "name": "Vuelos de hombros sentado",
+    "machine_name": "Life Fitness Seated Lateral Raise",
     "equipment": "machine",
-    "primary_muscle": "isquiotibiales",
-    "secondary_muscles": ["glúteo"],
+    "primary_muscle": "deltoides lateral",
+    "secondary_muscles": ["deltoides anterior", "deltoides posterior"],
     "movement_pattern": "isolation",
     "unilateral": false,
     "weight_increment_kg": 5,
-    "default_rep_range": "10-15",
-    "setup_tips": "Ajustar la almohadilla del tobillo justo por encima del talón. El respaldo debe quedar vertical o ligeramente inclinado.",
-    "photo_ref": "photos/processed/curl_femoral_sentado_maquina.jpg"
+    "default_rep_range": "12-15",
+    "setup_tips": "Sentado con los codos ligeramente flexionados. Elevar los brazos lateralmente hasta la altura de los hombros. No sobrepasar la línea del hombro para proteger el manguito rotador.",
+    "photo_ref": "photos/processed/vuelos_hombros_sentado_maquina.jpg"
   },
   {
     "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b16",
