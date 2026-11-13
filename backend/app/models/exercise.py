@@ -11,6 +11,8 @@ class Exercise(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     machine_name: Mapped[str | None] = mapped_column(String(200))
     equipment: Mapped[str] = mapped_column(String(20), nullable=False)
+    exercise_type: Mapped[str] = mapped_column(String(20), default="strength", nullable=False)
+    met_value: Mapped[float | None] = mapped_column()
     primary_muscle: Mapped[str] = mapped_column(String(50), nullable=False)
     secondary_muscles: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     movement_pattern: Mapped[str] = mapped_column(String(20), nullable=False)

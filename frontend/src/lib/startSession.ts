@@ -5,6 +5,7 @@ import { suggestProgression } from './progression'
 /**
  * Crea una nueva sesión en Dexie a partir de un día de rutina.
  * Precarga los sets con la sugerencia de progresión basada en el historial.
+ * Para ejercicios de cardio, crea un único set de duración.
  * Retorna el id de la sesión creada.
  */
 export async function startSession(routineDayId: string, userId: string): Promise<string> {
@@ -15,12 +16,15 @@ export async function startSession(routineDayId: string, userId: string): Promis
     .filter((r) => r.routine_day_id === routineDayId && !r.deleted_at)
     .sortBy('position')
 
-  // Calcular sugerencia para cada ejercicio antes de la transacción
-  const suggestions = await Promise.all(
+  // Pre-compute per-exercise data (exercise type + progression suggestion)
+  const rdeData = await Promise.all(
     rdes.map(async (rde) => {
       const exercise = await db.exercises.get(rde.exercise_id)
+      if (exercise?.exercise_type === 'cardio') {
+        return { rde, isCardio: true, suggestion: null }
+      }
       const history = await getExerciseHistory(rde.exercise_id, 3)
-      return suggestProgression(
+      const suggestion = suggestProgression(
         {
           rep_min: rde.rep_min,
           rep_max: rde.rep_max,
@@ -30,6 +34,7 @@ export async function startSession(routineDayId: string, userId: string): Promis
         },
         history,
       )
+      return { rde, isCardio: false, suggestion }
     }),
   )
 
@@ -45,9 +50,8 @@ export async function startSession(routineDayId: string, userId: string): Promis
       deleted_at: null,
     })
 
-    for (let pos = 0; pos < rdes.length; pos++) {
-      const rde = rdes[pos]
-      const suggestion = suggestions[pos]
+    for (let pos = 0; pos < rdeData.length; pos++) {
+      const { rde, isCardio, suggestion } = rdeData[pos]
       const seId = crypto.randomUUID()
 
       await db.session_exercises.add({
@@ -60,22 +64,43 @@ export async function startSession(routineDayId: string, userId: string): Promis
         deleted_at: null,
       })
 
-      for (let i = 0; i < rde.target_sets; i++) {
+      if (isCardio) {
+        // Cardio: single set tracking duration
         await db.sets.add({
           id: crypto.randomUUID(),
           session_exercise_id: seId,
-          set_index: i,
+          set_index: 0,
           is_warmup: false,
-          planned_reps: suggestion.reps,
-          planned_weight_kg: suggestion.weight_kg,
-          reps: suggestion.reps,
-          weight_kg: suggestion.weight_kg,
+          planned_reps: null,
+          planned_weight_kg: null,
+          reps: null,
+          weight_kg: null,
           rpe: null,
           completed: false,
           notes: null,
+          duration_min: null,
           updated_at: now,
           deleted_at: null,
         })
+      } else {
+        for (let i = 0; i < rde.target_sets; i++) {
+          await db.sets.add({
+            id: crypto.randomUUID(),
+            session_exercise_id: seId,
+            set_index: i,
+            is_warmup: false,
+            planned_reps: suggestion?.reps ?? null,
+            planned_weight_kg: suggestion?.weight_kg ?? null,
+            reps: suggestion?.reps ?? null,
+            weight_kg: suggestion?.weight_kg ?? null,
+            rpe: null,
+            completed: false,
+            notes: null,
+            duration_min: null,
+            updated_at: now,
+            deleted_at: null,
+          })
+        }
       }
     }
 

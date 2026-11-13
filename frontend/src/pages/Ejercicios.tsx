@@ -5,7 +5,7 @@ import { apiFetch } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { groupByMuscle } from '../lib/muscleGroups'
 
-const EQUIPMENT_OPTIONS = ['machine', 'cable', 'barbell', 'dumbbell', 'bodyweight', 'smith', 'plate_loaded']
+const EQUIPMENT_OPTIONS = ['machine', 'cable', 'barbell', 'dumbbell', 'bodyweight', 'smith', 'plate_loaded', 'cardio']
 const MOVEMENT_OPTIONS = ['push', 'pull', 'squat', 'hinge', 'lunge', 'carry', 'isolation', 'core']
 const MUSCLE_OPTIONS = [
   'pectoral', 'dorsal', 'trapecio', 'romboides', 'deltoides anterior', 'deltoides lateral',
@@ -14,8 +14,8 @@ const MUSCLE_OPTIONS = [
 ]
 
 const BLANK: Omit<Exercise, 'id' | 'created_by' | 'updated_at' | 'deleted_at'> = {
-  name: '', machine_name: null, equipment: 'machine', primary_muscle: 'pectoral',
-  secondary_muscles: [], movement_pattern: 'push', unilateral: false,
+  name: '', machine_name: null, equipment: 'machine', exercise_type: 'strength', met_value: null,
+  primary_muscle: 'pectoral', secondary_muscles: [], movement_pattern: 'push', unilateral: false,
   weight_increment_kg: 2.5, default_rep_range: '8-12', setup_tips: null, photo_ref: null,
 }
 
@@ -78,6 +78,8 @@ export default function Ejercicios() {
       name: ex.name,
       machine_name: ex.machine_name,
       equipment: ex.equipment,
+      exercise_type: ex.exercise_type ?? 'strength',
+      met_value: ex.met_value ?? null,
       primary_muscle: ex.primary_muscle,
       secondary_muscles: ex.secondary_muscles,
       movement_pattern: ex.movement_pattern,
@@ -234,6 +236,42 @@ export default function Ejercicios() {
                   placeholder="Chest Press (opcional)"
                 />
               </Field>
+              <Field label="Tipo">
+                <div className="flex gap-2">
+                  {(['strength', 'cardio'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => set('exercise_type', t)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                        form.exercise_type === t
+                          ? t === 'cardio'
+                            ? 'bg-orange-500 text-white border-orange-500'
+                            : 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      {t === 'strength' ? '🏋️ Fuerza' : '🏃 Cardio'}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              {form.exercise_type === 'cardio' && (
+                <Field label="MET estimado (intensidad media)">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.5"
+                    min="1"
+                    max="20"
+                    value={form.met_value ?? 5.0}
+                    onChange={(e) => set('met_value', e.target.value ? parseFloat(e.target.value) : null)}
+                    className={inputCls}
+                    placeholder="5.0"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Elíptica: 5.0 · Bici estática: 5.5 · Correr: 8.0 · Saltar cuerda: 10.0</p>
+                </Field>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Equipo">
                   <Select value={form.equipment} onChange={(v) => set('equipment', v)} options={EQUIPMENT_OPTIONS} />
@@ -323,7 +361,9 @@ function ExerciseCard({ exercise: ex, onEdit }: { exercise: Exercise; onEdit: ()
         <div className="px-3 py-3 flex flex-col justify-center min-w-0 flex-1">
           <p className="text-gray-900 font-medium text-sm leading-tight">{ex.name}</p>
           <p className="text-gray-500 text-xs mt-1">
-            {ex.primary_muscle} · {ex.default_rep_range} reps · +{ex.weight_increment_kg} kg
+            {ex.exercise_type === 'cardio'
+              ? `🏃 cardio · ${ex.primary_muscle} · MET ${ex.met_value ?? 5.0}`
+              : `${ex.primary_muscle} · ${ex.default_rep_range} reps · +${ex.weight_increment_kg} kg`}
           </p>
           {ex.setup_tips && (
             <button type="button" onClick={() => setTipsExpanded((v) => !v)} className="mt-0.5 text-left">

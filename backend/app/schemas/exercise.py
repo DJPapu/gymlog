@@ -7,6 +7,8 @@ class ExerciseBase(BaseModel):
     name: str
     machine_name: str | None = None
     equipment: str
+    exercise_type: str = "strength"
+    met_value: float | None = None
     primary_muscle: str
     secondary_muscles: list[str] = []
     movement_pattern: str

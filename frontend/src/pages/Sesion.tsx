@@ -134,7 +134,7 @@ export default function Sesion() {
         {isEditing && <SessionTimesEditor session={session} />}
         {sessionExercises === undefined && <p className="text-gray-400 text-sm">Cargando...</p>}
         {sessionExercises?.map((se: SessionExercise) => (
-          <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} routineDayId={session.routine_day_id ?? null} isEditing={isEditing} />
+          <ExerciseCard key={se.id} sessionExercise={se} sessionId={sessionId!} routineDayId={session.routine_day_id ?? null} isEditing={isEditing} userId={session.user_id} />
         ))}
       </div>
     </div>
@@ -202,7 +202,7 @@ function SessionTimesEditor({ session }: { session: { id: string; started_at: st
 
 // ── Tarjeta de ejercicio ────────────────────────────────────────────────────
 
-function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing }: { sessionExercise: SessionExercise; sessionId: string; routineDayId: string | null; isEditing: boolean }) {
+function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing, userId }: { sessionExercise: SessionExercise; sessionId: string; routineDayId: string | null; isEditing: boolean; userId: string }) {
   const sets = useLiveQuery(
     () =>
       db.sets
@@ -211,6 +211,19 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing 
     [se.id],
   )
   const exercise = useLiveQuery(() => db.exercises.get(se.exercise_id), [se.exercise_id])
+  const latestMetric = useLiveQuery(
+    () =>
+      db.body_metrics
+        .filter((m) => m.user_id === userId && !m.deleted_at)
+        .toArray()
+        .then((arr) => {
+          arr.sort((a, b) => (a.measured_at < b.measured_at ? 1 : -1))
+          return arr[0] ?? null
+        }),
+    [userId],
+  )
+  const userWeightKg = latestMetric?.weight_kg ?? 75
+  const isCardio = exercise?.exercise_type === 'cardio'
   const rde = useLiveQuery(
     () =>
       routineDayId
@@ -233,7 +246,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing 
   }, [se.exercise_id, sessionId])
 
   useEffect(() => {
-    if (!exercise || !rde || isEditing) return
+    if (!exercise || !rde || isEditing || exercise.exercise_type === 'cardio') return
     getExerciseHistory(se.exercise_id, 3, sessionId).then((history) => {
       setSuggestion(suggestProgression(
         {
@@ -253,6 +266,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing 
 
   useEffect(() => {
     if (!rde?.target_weight_kg || !sets || !exercise) return
+    if (exercise.exercise_type === 'cardio') return
     const targetSets = rde.target_sets ?? 1
     if (completedCount < targetSets) return
     if (promptedRef.current) return
@@ -319,18 +333,18 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing 
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <h3 className="text-gray-900 font-bold text-base leading-tight">{exercise.name}</h3>
-            {rde && (
+            {!isCardio && rde && (
               <p className="text-emerald-600 text-xs mt-0.5">
                 Objetivo: {rde.target_sets}×{rde.rep_min}–{rde.rep_max} reps
                 {rde.target_weight_kg != null && ` · ${rde.target_weight_kg} kg`}
               </p>
             )}
-            {lastSummary && (
+            {!isCardio && lastSummary && (
               <p className="text-indigo-600 text-xs mt-0.5">
                 Última vez: {lastSummary.display}
               </p>
             )}
-            {suggestion && suggestion.direction !== 'first' && (
+            {!isCardio && suggestion && suggestion.direction !== 'first' && (
               <p className={`text-xs mt-0.5 font-medium ${
                 suggestion.direction === 'up'
                   ? 'text-emerald-600'
@@ -341,12 +355,17 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing 
                 {suggestion.reason}
               </p>
             )}
+            {isCardio && (
+              <p className="text-orange-500 text-xs mt-0.5">cardio · MET {exercise.met_value ?? 5.0}</p>
+            )}
             {exercise.setup_tips && (
               <p className="text-gray-400 text-xs mt-0.5 line-clamp-1">{exercise.setup_tips}</p>
             )}
           </div>
           <div className="shrink-0 text-right">
-            <span className="text-xs text-gray-400">{completedCount}/{totalCount} series</span>
+            {!isCardio && (
+              <span className="text-xs text-gray-400">{completedCount}/{totalCount} series</span>
+            )}
             <button
               onClick={() => setShowNote(!showNote)}
               className="block text-gray-400 text-xs mt-1 hover:text-gray-600"
@@ -369,30 +388,46 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing 
         )}
       </div>
 
-      {/* Cabecera columnas */}
-      <div className="px-4 pb-1 grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 text-xs text-gray-400">
-        <span>#</span>
-        <span className="text-center">Peso (kg)</span>
-        <span className="text-center">Reps</span>
-        <span />
-        <span />
-      </div>
+      {isCardio ? (
+        /* Cardio: input de duración + estimación de calorías */
+        <CardioPanel
+          sets={sets ?? []}
+          seId={se.id}
+          metValue={exercise.met_value ?? 5.0}
+          weightKg={userWeightKg}
+        />
+      ) : (
+        <>
+          {/* Cabecera columnas */}
+          <div className="px-4 pb-1 grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 text-xs text-gray-400">
+            <span>#</span>
+            <span className="text-center">Peso (kg)</span>
+            <span className="text-center">Reps</span>
+            <span />
+            <span />
+          </div>
 
-      {/* Sets */}
-      <div className="divide-y divide-gray-100">
-        {sets?.map((set: SetRecord) => (
-          <SetRow key={set.id} set={set} />
-        ))}
-      </div>
+          {/* Sets */}
+          <div className="divide-y divide-gray-100">
+            {sets?.map((set: SetRecord) => (
+              <SetRow key={set.id} set={set} />
+            ))}
+          </div>
+        </>
+      )}
 
-      {/* Pie: añadir serie + guardar + eliminar ejercicio */}
+      {/* Pie: añadir serie (solo fuerza) + guardar + eliminar ejercicio */}
       <div className="px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={() => addSet(se.id)}
-          className="text-indigo-600 text-sm hover:text-indigo-500"
-        >
-          + Añadir serie
-        </button>
+        {!isCardio ? (
+          <button
+            onClick={() => addSet(se.id)}
+            className="text-indigo-600 text-sm hover:text-indigo-500"
+          >
+            + Añadir serie
+          </button>
+        ) : (
+          <div />
+        )}
         <div className="flex items-center gap-3">
           <button
             onClick={saveExercise}
@@ -479,6 +514,103 @@ function CelebrationOverlay() {
   )
 }
 
+// ── Panel cardio ────────────────────────────────────────────────────────────
+
+function CardioPanel({
+  sets,
+  seId,
+  metValue,
+  weightKg,
+}: {
+  sets: SetRecord[]
+  seId: string
+  metValue: number
+  weightKg: number
+}) {
+  const durationSet = sets[0] ?? null
+  const durationMin = durationSet?.duration_min ?? null
+  const calories =
+    durationMin != null ? Math.round(metValue * weightKg * (durationMin / 60)) : null
+
+  async function updateDuration(min: number | null) {
+    const now = new Date().toISOString()
+    if (!durationSet) {
+      await db.sets.add({
+        id: crypto.randomUUID(),
+        session_exercise_id: seId,
+        set_index: 0,
+        is_warmup: false,
+        planned_reps: null,
+        planned_weight_kg: null,
+        reps: null,
+        weight_kg: null,
+        rpe: null,
+        completed: false,
+        notes: null,
+        duration_min: min,
+        updated_at: now,
+        deleted_at: null,
+      })
+    } else {
+      await db.sets.update(durationSet.id, { duration_min: min, updated_at: now })
+    }
+  }
+
+  async function toggleComplete() {
+    if (!durationSet) return
+    await db.sets.update(durationSet.id, {
+      completed: !durationSet.completed,
+      updated_at: new Date().toISOString(),
+    })
+  }
+
+  return (
+    <div className="px-4 py-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500 w-20 shrink-0">Duración</span>
+        <button
+          onClick={() => updateDuration(Math.max(1, (durationMin ?? 0) - 5))}
+          className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700 text-lg active:bg-gray-200 min-h-[44px] min-w-[44px]"
+        >
+          −
+        </button>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          value={durationMin ?? ''}
+          onChange={(e) => updateDuration(e.target.value ? parseInt(e.target.value) : null)}
+          placeholder="0"
+          className="w-16 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm text-center py-2 focus:outline-none focus:border-indigo-500"
+        />
+        <button
+          onClick={() => updateDuration((durationMin ?? 0) + 5)}
+          className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700 text-lg active:bg-gray-200 min-h-[44px] min-w-[44px]"
+        >
+          +
+        </button>
+        <span className="text-sm text-gray-500">min</span>
+        <button
+          onClick={toggleComplete}
+          className={`ml-auto w-10 h-10 rounded-xl flex items-center justify-center font-bold min-h-[44px] min-w-[44px] transition-colors shrink-0 ${
+            durationSet?.completed ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+          }`}
+        >
+          ✓
+        </button>
+      </div>
+      {calories != null && (
+        <p className="text-sm text-orange-600 font-medium flex items-center gap-1.5">
+          🔥 ~{calories} kcal
+          <span className="text-gray-400 text-xs font-normal">
+            (MET {metValue} · {weightKg} kg)
+          </span>
+        </p>
+      )}
+    </div>
+  )
+}
+
 async function addSet(sessionExerciseId: string) {
   const now = new Date().toISOString()
   const existing = await db.sets
@@ -497,6 +629,7 @@ async function addSet(sessionExerciseId: string) {
     rpe: null,
     completed: false,
     notes: null,
+    duration_min: null,
     updated_at: now,
     deleted_at: null,
   })

@@ -15,8 +15,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.alter_column('exercises', 'photo_ref', type_=sa.Text(), existing_type=sa.String(300), existing_nullable=True)
+    # batch_alter_table works on SQLite and Postgres alike
+    with op.batch_alter_table('exercises') as batch_op:
+        batch_op.alter_column('photo_ref', type_=sa.Text(), existing_type=sa.String(300), existing_nullable=True)
 
 
 def downgrade() -> None:
-    op.alter_column('exercises', 'photo_ref', type_=sa.String(300), existing_type=sa.Text(), existing_nullable=True)
+    with op.batch_alter_table('exercises') as batch_op:
+        batch_op.alter_column('photo_ref', type_=sa.String(300), existing_type=sa.Text(), existing_nullable=True)

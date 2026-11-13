@@ -49,3 +49,4 @@ class Set(Base, TimestampMixin):
     rpe: Mapped[float | None] = mapped_column(Numeric(3, 1))
     completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    duration_min: Mapped[int | None] = mapped_column(Integer)

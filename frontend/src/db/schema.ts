@@ -7,6 +7,8 @@ export interface Exercise {
   name: string
   machine_name: string | null
   equipment: string
+  exercise_type: string  // 'strength' | 'cardio'
+  met_value: number | null
   primary_muscle: string
   secondary_muscles: string[]
   movement_pattern: string
@@ -88,6 +90,7 @@ export interface SetRecord {
   rpe: number | null
   completed: boolean
   notes: string | null
+  duration_min: number | null  // cardio only
   updated_at: string
   deleted_at: string | null
 }

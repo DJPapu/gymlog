@@ -12,6 +12,8 @@ export async function seedCatalogIfEmpty(): Promise<void> {
       name: ex.name as string,
       machine_name: (ex.machine_name as string) ?? null,
       equipment: ex.equipment as string,
+      exercise_type: (ex.exercise_type as string) ?? 'strength',
+      met_value: (ex.met_value as number) ?? null,
       primary_muscle: ex.primary_muscle as string,
       secondary_muscles: (ex.secondary_muscles as string[]) ?? [],
       movement_pattern: ex.movement_pattern as string,
