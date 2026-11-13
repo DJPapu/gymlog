@@ -419,7 +419,7 @@
     "weight_increment_kg": 5,
     "default_rep_range": "8-12",
     "setup_tips": "Pecho apoyado en el pad inclinado. Tirar de las asas hacia atrás contrayendo el dorsal. Mantener el cuello neutro y los codos cerca del cuerpo.",
-    "photo_ref": null
+    "photo_ref": "photos/processed/remo_apoyo_pecho_hammer.jpg"
   },
   {
     "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b31",
@@ -435,7 +435,7 @@
     "weight_increment_kg": 0,
     "default_rep_range": "20-45",
     "setup_tips": "Ajustar resistencia y longitud de zancada. Mantener espalda erguida y usar los brazos para impulsar. Intensidad media = RPE 5-6.",
-    "photo_ref": null
+    "photo_ref": "photos/processed/maquina_eliptica.jpg"
   },
   {
     "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b32",
@@ -451,7 +451,7 @@
     "weight_increment_kg": 0,
     "default_rep_range": "5-10",
     "setup_tips": "Agarre prono, manos a la anchura de los hombros o más separadas. Tirar hasta que la barbilla supere la barra. Bajar de forma controlada a extensión completa.",
-    "photo_ref": null
+    "photo_ref": "photos/processed/power_tower.jpg"
   },
   {
     "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b33",
@@ -467,7 +467,7 @@
     "weight_increment_kg": 0,
     "default_rep_range": "8-12",
     "setup_tips": "Bajar hasta 90° de codo con el torso ligeramente inclinado hacia adelante. Subir a extensión completa sin bloquear los codos.",
-    "photo_ref": null
+    "photo_ref": "photos/processed/power_tower.jpg"
   },
   {
     "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b34",
@@ -483,7 +483,7 @@
     "weight_increment_kg": 0,
     "default_rep_range": "10-15",
     "setup_tips": "Colgado de la barra con los brazos extendidos. Elevar las rodillas hacia el pecho en un movimiento controlado. Evitar balancearse usando el impulso.",
-    "photo_ref": null
+    "photo_ref": "photos/processed/power_tower.jpg"
   },
   {
     "id": "3f1a2b4c-5d6e-7f8a-9b0c-1d2e3f4a5b35",
@@ -499,6 +499,6 @@
     "weight_increment_kg": 2.5,
     "default_rep_range": "12-20",
     "setup_tips": "Polea alta con accesorio de cuerda. De pie o sentado en el suelo. Tirar hacia la cara separando las manos al final con los codos a la altura de los hombros o por encima.",
-    "photo_ref": null
+    "photo_ref": "photos/processed/jalon_cara_cuerda_polea.jpg"
   }
 ]
