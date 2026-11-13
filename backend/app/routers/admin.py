@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
@@ -160,18 +161,27 @@ def ai_summary(
         "Responde solo con el informe, sin introducción previa."
     )
 
-    try:
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = client.models.generate_content(
-            model="gemini-3.8-flash",
-            contents=prompt,
-            config=genai_types.GenerateContentConfig(
-                system_instruction=system,
-                max_output_tokens=1500,
-            ),
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error llamando a Gemini: {e}") from e
+    client = genai.Client(api_key=settings.gemini_api_key)
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(2 ** attempt)  # 2s, 4s
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=system,
+                    max_output_tokens=1500,
+                ),
+            )
+            break
+        except Exception as e:
+            last_exc = e
+            if "503" not in str(e) and "UNAVAILABLE" not in str(e):
+                raise HTTPException(status_code=502, detail=f"Error llamando a Gemini: {e}") from e
+    else:
+        raise HTTPException(status_code=502, detail=f"Gemini no disponible tras 3 intentos: {last_exc}") from last_exc
 
     return {"summary": response.text}
 
