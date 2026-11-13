@@ -110,9 +110,13 @@ export default function AdminIA() {
               <p className="text-red-500 text-xs mt-1">
                 Asegúrate de haber añadido <code>GEMINI_API_KEY</code> en las variables de entorno de Render.
               </p>
+            ) : error.includes('RESOURCE_EXHAUSTED') || error.includes('429') ? (
+              <p className="text-red-500 text-xs mt-1">
+                Límite diario de la API de Gemini alcanzado. Se reinicia a medianoche (hora del servidor). Considera activar facturación en Google AI Studio para aumentar el límite.
+              </p>
             ) : error.startsWith('API 502') ? (
               <p className="text-red-500 text-xs mt-1">
-                Gemini no está disponible en este momento (alta demanda). Inténtalo de nuevo en unos segundos.
+                Gemini no está disponible en este momento. Inténtalo de nuevo en unos segundos.
               </p>
             ) : null}
           </div>

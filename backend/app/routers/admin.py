@@ -248,7 +248,7 @@ def ai_summary(
     )
 
     client = genai.Client(api_key=settings.gemini_api_key)
-    _MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash"]
+    _MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash"]
     last_exc: Exception | None = None
     response = None
     for model in _MODELS:
@@ -268,7 +268,7 @@ def ai_summary(
             except Exception as e:
                 last_exc = e
                 err_str = str(e)
-                if "503" in err_str or "UNAVAILABLE" in err_str or "404" in err_str:
+                if any(x in err_str for x in ("503", "UNAVAILABLE", "404", "429", "RESOURCE_EXHAUSTED")):
                     continue
                 raise HTTPException(status_code=502, detail=f"Error llamando a Gemini: {e}") from e
         if response is not None:
