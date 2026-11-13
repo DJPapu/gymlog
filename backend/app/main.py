@@ -13,6 +13,9 @@ from app.routers import admin, exercises, routines, sync
 async def lifespan(app: FastAPI):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")
+    # Sync catalog on every deploy so new exercises land in DB automatically
+    from app.scripts.import_catalog import main as import_catalog
+    import_catalog()
     yield
 
 
