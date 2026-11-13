@@ -28,7 +28,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const url = `${API_URL}${path}`
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 20_000) // 20s max por petición
+  const timeoutId = setTimeout(() => controller.abort(), 90_000) // 90s: margen para cold start de Render (~60s)
 
   let res: Response
   try {
