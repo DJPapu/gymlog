@@ -24,19 +24,15 @@ export default function Hoy() {
     [activeRoutine?.id],
   )
 
-  // Sesión en curso: solo se muestra si no hay ninguna sesión terminada hoy.
-  // Evita que sesiones huérfanas de días anteriores aparezcan como "en curso"
-  // cuando el usuario ya registró y terminó una sesión en el día de hoy.
+  // Sesión en curso: solo se muestra si la sesión sin terminar empezó HOY.
+  // Esto evita que sesiones huérfanas de días anteriores aparezcan como "en curso"
+  // en días en los que el usuario no ha pulsado Comenzar.
   const sessionInProgress = useLiveQuery(
-    async () => {
+    () => {
       const uid = user?.id ?? ''
       const todayISO = new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
-      const completedToday = await db.sessions
-        .filter((s) => s.user_id === uid && !!s.ended_at && !s.deleted_at && s.started_at >= todayISO)
-        .first()
-      if (completedToday) return null
       return db.sessions
-        .filter((s) => s.user_id === uid && !s.ended_at && !s.deleted_at)
+        .filter((s) => s.user_id === uid && !s.ended_at && !s.deleted_at && s.started_at >= todayISO)
         .first()
     },
     [user?.id],

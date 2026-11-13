@@ -4,6 +4,7 @@ import { useSyncStatus } from '../../sync/useSyncStatus'
 import SyncBadge from '../../components/SyncBadge'
 import AdminRutinas from './AdminRutinas'
 import AdminCatalogo from './AdminCatalogo'
+import AdminIA from './AdminIA'
 import Progreso from '../Progreso'
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL as string | undefined
@@ -31,6 +32,7 @@ function AdminShell() {
           <TabLink to="/admin/rutinas" active={tab === 'rutinas'}>Rutinas</TabLink>
           <TabLink to="/admin/catalogo" active={tab === 'catalogo'}>Catálogo</TabLink>
           <TabLink to="/admin/progreso" active={tab === 'progreso'}>Progreso</TabLink>
+          <TabLink to="/admin/ia" active={tab === 'ia'}>✨ IA</TabLink>
         </nav>
         <SyncBadge state={state} pendingCount={pendingCount} onSync={doSync} lastError={lastError} />
         <button
@@ -49,6 +51,7 @@ function AdminShell() {
           <Route path="rutinas" element={<AdminRutinas />} />
           <Route path="catalogo" element={<AdminCatalogo />} />
           <Route path="progreso" element={<Progreso />} />
+          <Route path="ia" element={<AdminIA />} />
         </Routes>
       </main>
     </div>

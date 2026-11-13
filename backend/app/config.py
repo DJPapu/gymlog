@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     api_secret: str = ""          # token estático; vacío = modo dev (acepta 'dev-local-user')
     fixed_user_id: str = "local-user-dev"  # user_id fijo que se usa en todas las tablas
     cors_origins: str = "http://localhost:5173"
+    gemini_api_key: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:
