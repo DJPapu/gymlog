@@ -37,7 +37,6 @@ def ai_summary(
             .where(
                 WorkoutSession.user_id == user_id,
                 WorkoutSession.started_at >= since,
-                WorkoutSession.ended_at.isnot(None),
                 WorkoutSession.deleted_at.is_(None),
             )
             .order_by(WorkoutSession.started_at)
@@ -83,18 +82,23 @@ def ai_summary(
                     .where(
                         WorkoutSet.session_exercise_id == se.id,
                         WorkoutSet.deleted_at.is_(None),
-                        WorkoutSet.completed.is_(True),
                         WorkoutSet.is_warmup.is_(False),
                     )
                     .order_by(WorkoutSet.set_index)
                 ).scalars()
             )
 
-            sets_str = ", ".join(
-                f"{s.reps}×{s.weight_kg}kg" + (f" RPE{float(s.rpe)}" if s.rpe else "")
-                for s in sets
-                if s.reps is not None and s.weight_kg is not None
-            )
+            def _fmt_set(s: WorkoutSet) -> str | None:
+                if s.duration_min is not None:
+                    return f"{s.duration_min}min"
+                if s.reps is not None and s.weight_kg is not None:
+                    rpe_str = f" RPE{float(s.rpe)}" if s.rpe else ""
+                    return f"{s.reps}×{s.weight_kg}kg{rpe_str}"
+                if s.reps is not None:
+                    return f"{s.reps} reps"
+                return None
+
+            sets_str = ", ".join(f for s in sets if (f := _fmt_set(s)) is not None)
             if not sets_str:
                 continue
 
