@@ -162,26 +162,35 @@ def ai_summary(
     )
 
     client = genai.Client(api_key=settings.gemini_api_key)
+    # Try models in order; fall back when overloaded (503) or unavailable (404)
+    _MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash"]
     last_exc: Exception | None = None
-    for attempt in range(3):
-        if attempt:
-            time.sleep(2 ** attempt)  # 2s, 4s
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=system,
-                    max_output_tokens=1500,
-                ),
-            )
-            break
-        except Exception as e:
-            last_exc = e
-            if "503" not in str(e) and "UNAVAILABLE" not in str(e):
+    response = None
+    for model in _MODELS:
+        for attempt in range(2):
+            if attempt:
+                time.sleep(3)
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction=system,
+                        max_output_tokens=1500,
+                    ),
+                )
+                break
+            except Exception as e:
+                last_exc = e
+                err_str = str(e)
+                if "503" in err_str or "UNAVAILABLE" in err_str or "404" in err_str:
+                    continue  # try next attempt / next model
                 raise HTTPException(status_code=502, detail=f"Error llamando a Gemini: {e}") from e
-    else:
-        raise HTTPException(status_code=502, detail=f"Gemini no disponible tras 3 intentos: {last_exc}") from last_exc
+        if response is not None:
+            break
+
+    if response is None:
+        raise HTTPException(status_code=502, detail=f"Gemini no disponible en ningún modelo: {last_exc}") from last_exc
 
     return {"summary": response.text}
 
