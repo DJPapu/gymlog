@@ -22,18 +22,24 @@ export function wakeUpBackend(): void {
     .catch(() => { /* fire-and-forget */ })
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}, timeoutMs = 90_000): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = getAuthHeaders(method)
   const url = `${API_URL}${path}`
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 90_000) // 90s: margen para cold start de Render (~60s)
+  const timeoutId = setTimeout(
+    () => controller.abort(new DOMException(`La solicitud tardó más de ${timeoutMs / 1000}s. El servidor puede estar iniciándose; inténtalo de nuevo.`, 'TimeoutError')),
+    timeoutMs,
+  )
 
   let res: Response
   try {
     res = await fetch(url, { ...init, headers: { ...headers, ...init.headers }, signal: controller.signal })
   } catch (err) {
+    if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new Error(err.message || `La solicitud tardó demasiado (>${timeoutMs / 1000}s). Inténtalo de nuevo.`)
+    }
     throw new Error(`Fetch failed (${url}): ${err}`)
   } finally {
     clearTimeout(timeoutId)

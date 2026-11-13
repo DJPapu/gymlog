@@ -52,7 +52,7 @@ export default function AdminIA() {
     setError(null)
     setSummary(null)
     try {
-      const res = await apiFetch<{ summary: string }>(`/admin/ai-summary?weeks=${weeks}`)
+      const res = await apiFetch<{ summary: string }>(`/admin/ai-summary?weeks=${weeks}`, {}, 180_000)
       setSummary(res.summary)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al generar el resumen')
