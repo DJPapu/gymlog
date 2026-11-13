@@ -261,7 +261,7 @@ def ai_summary(
                     contents=prompt,
                     config=genai_types.GenerateContentConfig(
                         system_instruction=system,
-                        max_output_tokens=2000,
+                        max_output_tokens=8192,
                     ),
                 )
                 break
