@@ -8,9 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
+from app.config import settings
 from app.db import get_db
 from app.models.exercise import Exercise
 
@@ -29,16 +27,19 @@ def main() -> None:
     # Always bump updated_at so sync pull picks up every change on next client pull
     now = datetime.now(timezone.utc)
 
+    # Pick the right dialect-specific upsert helper
+    is_sqlite = settings.database_url.startswith("sqlite")
+    if is_sqlite:
+        from sqlalchemy.dialects.sqlite import insert as _insert
+    else:
+        from sqlalchemy.dialects.postgresql import insert as _insert  # type: ignore[no-redef]
+
     db = next(get_db())
     try:
-        # Detect dialect to pick the right insert helper
-        dialect = db.bind.dialect.name  # type: ignore[union-attr]
-        insert_fn = sqlite_insert if dialect == "sqlite" else pg_insert
-
         for ex in exercises:
             values = {**ex, "updated_at": now}
             stmt = (
-                insert_fn(Exercise)
+                _insert(Exercise)
                 .values(**values)
                 .on_conflict_do_update(
                     index_elements=["id"],

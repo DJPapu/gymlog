@@ -1,9 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
-from google import genai
-from google.genai import types as genai_types
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -135,7 +133,15 @@ def ai_summary(
 
     context = _build_context(session_data, metrics)
 
-    client = genai.Client(api_key=settings.gemini_api_key)
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY no configurada en las variables de entorno del servidor.")
+
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=f"Librería google-genai no instalada: {e}") from e
+
     system = (
         "Eres un entrenador personal experto con conocimiento en periodización y fisiología del ejercicio. "
         "Analiza los datos de entrenamiento y proporciona un informe en español. "
@@ -153,14 +159,19 @@ def ai_summary(
         "Incluye 3-5 recomendaciones específicas y accionables. "
         "Responde solo con el informe, sin introducción previa."
     )
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-        config=genai_types.GenerateContentConfig(
-            system_instruction=system,
-            max_output_tokens=1500,
-        ),
-    )
+
+    try:
+        client = genai.Client(api_key=settings.gemini_api_key)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=1500,
+            ),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error llamando a Gemini: {e}") from e
 
     return {"summary": response.text}
 
