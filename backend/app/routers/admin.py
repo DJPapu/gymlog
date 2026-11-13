@@ -168,7 +168,7 @@ def ai_summary(
             time.sleep(2 ** attempt)  # 2s, 4s
         try:
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
                     system_instruction=system,
