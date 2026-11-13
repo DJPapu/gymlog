@@ -106,9 +106,13 @@ export default function AdminIA() {
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
             <p className="text-red-700 text-sm">{error}</p>
-            {error.includes('GEMINI_API_KEY') || error.includes('503') ? (
+            {error.startsWith('API 503') || error.includes('GEMINI_API_KEY') ? (
               <p className="text-red-500 text-xs mt-1">
                 Asegúrate de haber añadido <code>GEMINI_API_KEY</code> en las variables de entorno de Render.
+              </p>
+            ) : error.startsWith('API 502') ? (
+              <p className="text-red-500 text-xs mt-1">
+                Gemini no está disponible en este momento (alta demanda). Inténtalo de nuevo en unos segundos.
               </p>
             ) : null}
           </div>
