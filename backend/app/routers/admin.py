@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser
@@ -276,6 +276,104 @@ def ai_summary(
         raise HTTPException(status_code=502, detail=f"Gemini no disponible en ningún modelo: {last_exc}") from last_exc
 
     return {"summary": response.text}
+
+
+@router.post("/adjust-target-weights")
+def adjust_target_weights(
+    user_id: CurrentUser = "",
+    db: DB = None,
+) -> dict[str, Any]:
+    """
+    Actualiza target_weight_kg en routine_day_exercises al peso máximo real
+    ejecutado en la última sesión de cada ejercicio del usuario.
+    """
+    # Subquery: última sesión (started_at max) por exercise_id
+    latest_subq = (
+        select(
+            SessionExercise.exercise_id,
+            func.max(WorkoutSession.started_at).label("last_started"),
+        )
+        .join(WorkoutSession, WorkoutSession.id == SessionExercise.session_id)
+        .where(WorkoutSession.user_id == user_id)
+        .where(WorkoutSession.deleted_at.is_(None))
+        .where(SessionExercise.deleted_at.is_(None))
+        .group_by(SessionExercise.exercise_id)
+        .subquery()
+    )
+
+    # Subquery: session_exercise_id de esa última sesión
+    last_se_subq = (
+        select(
+            SessionExercise.id.label("se_id"),
+            SessionExercise.exercise_id,
+        )
+        .join(WorkoutSession, WorkoutSession.id == SessionExercise.session_id)
+        .join(
+            latest_subq,
+            (latest_subq.c.exercise_id == SessionExercise.exercise_id)
+            & (latest_subq.c.last_started == WorkoutSession.started_at),
+        )
+        .where(WorkoutSession.user_id == user_id)
+        .where(WorkoutSession.deleted_at.is_(None))
+        .where(SessionExercise.deleted_at.is_(None))
+        .subquery()
+    )
+
+    # Peso máximo por ejercicio en esa sesión
+    max_weight_subq = (
+        select(
+            last_se_subq.c.exercise_id,
+            func.max(WorkoutSet.weight_kg).label("max_weight"),
+        )
+        .join(WorkoutSet, WorkoutSet.session_exercise_id == last_se_subq.c.se_id)
+        .where(WorkoutSet.is_warmup.is_(False))
+        .where(WorkoutSet.weight_kg.is_not(None))
+        .where(WorkoutSet.deleted_at.is_(None))
+        .group_by(last_se_subq.c.exercise_id)
+        .subquery()
+    )
+
+    # Routine day exercises del usuario (via routine → user_id)
+    rows = db.execute(
+        select(
+            RoutineDayExercise.id,
+            RoutineDayExercise.exercise_id,
+            RoutineDayExercise.target_weight_kg,
+            Exercise.name.label("ex_name"),
+            max_weight_subq.c.max_weight,
+        )
+        .join(RoutineDay, RoutineDay.id == RoutineDayExercise.routine_day_id)
+        .join(Routine, Routine.id == RoutineDay.routine_id)
+        .join(Exercise, Exercise.id == RoutineDayExercise.exercise_id)
+        .outerjoin(max_weight_subq, max_weight_subq.c.exercise_id == RoutineDayExercise.exercise_id)
+        .where(Routine.user_id == user_id)
+        .where(RoutineDayExercise.deleted_at.is_(None))
+        .where(RoutineDay.deleted_at.is_(None))
+        .where(Routine.deleted_at.is_(None))
+    ).all()
+
+    now = datetime.now(timezone.utc).isoformat()
+    updated: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+
+    for row in rows:
+        if row.max_weight is None:
+            skipped.append({"exercise": row.ex_name, "reason": "sin historial"})
+            continue
+        if row.max_weight == row.target_weight_kg:
+            continue
+        db.execute(
+            text("UPDATE routine_day_exercises SET target_weight_kg = :w, updated_at = :ts WHERE id = :id"),
+            {"w": float(row.max_weight), "ts": now, "id": row.id},
+        )
+        updated.append({
+            "exercise": row.ex_name,
+            "old_kg": row.target_weight_kg,
+            "new_kg": float(row.max_weight),
+        })
+
+    db.commit()
+    return {"updated": updated, "skipped": skipped}
 
 
 def _fmt_sessions(sessions: list[dict[str, Any]]) -> list[str]:

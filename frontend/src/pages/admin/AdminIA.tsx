@@ -41,11 +41,30 @@ function renderLine(line: string, i: number) {
   return <p key={i} className="text-sm text-gray-700 leading-relaxed">{rich}</p>
 }
 
+type AdjustResult = { updated: { exercise: string; old_kg: number | null; new_kg: number }[]; skipped: { exercise: string; reason: string }[] }
+
 export default function AdminIA() {
   const [loading, setLoading] = useState(false)
   const [summary, setSummary] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [weeks, setWeeks] = useState(4)
+  const [adjusting, setAdjusting] = useState(false)
+  const [adjustResult, setAdjustResult] = useState<AdjustResult | null>(null)
+  const [adjustError, setAdjustError] = useState<string | null>(null)
+
+  async function adjustWeights() {
+    setAdjusting(true)
+    setAdjustError(null)
+    setAdjustResult(null)
+    try {
+      const res = await apiFetch<AdjustResult>('/admin/adjust-target-weights', { method: 'POST' })
+      setAdjustResult(res)
+    } catch (err) {
+      setAdjustError(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setAdjusting(false)
+    }
+  }
 
   async function generate() {
     setLoading(true)
@@ -140,6 +159,60 @@ export default function AdminIA() {
           </p>
         </div>
       )}
+
+      {/* Herramientas de mantenimiento */}
+      <div className="border-t border-gray-200 pt-6">
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Herramientas</h3>
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Ajustar pesos objetivo</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Actualiza el peso objetivo de cada ejercicio en la rutina al máximo real ejecutado en la última sesión.
+              </p>
+            </div>
+            <button
+              onClick={adjustWeights}
+              disabled={adjusting}
+              className="shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+            >
+              {adjusting ? 'Ajustando...' : 'Ajustar'}
+            </button>
+          </div>
+
+          {adjustError && (
+            <p className="mt-3 text-red-600 text-xs">{adjustError}</p>
+          )}
+
+          {adjustResult && (
+            <div className="mt-4 space-y-3">
+              {adjustResult.updated.length > 0 ? (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-1.5">✏️ Actualizados ({adjustResult.updated.length})</p>
+                  <table className="w-full text-xs text-gray-700">
+                    <tbody>
+                      {adjustResult.updated.map((r, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="py-1.5 pr-4">{r.exercise}</td>
+                          <td className="py-1.5 pr-2 text-gray-400 text-right">{r.old_kg != null ? `${r.old_kg} kg` : '—'}</td>
+                          <td className="py-1.5 text-right text-emerald-600 font-semibold">→ {r.new_kg} kg</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">Todos los objetivos ya coincidían con el historial.</p>
+              )}
+              {adjustResult.skipped.length > 0 && (
+                <p className="text-xs text-gray-400">
+                  ⚠️ {adjustResult.skipped.length} sin historial: {adjustResult.skipped.map(s => s.exercise).join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
