@@ -21,7 +21,10 @@ export async function startSession(routineDayId: string, userId: string): Promis
     rdes.map(async (rde) => {
       const exercise = await db.exercises.get(rde.exercise_id)
       if (exercise?.exercise_type === 'cardio') {
-        return { rde, isCardio: true, suggestion: null }
+        return { rde, isCardio: true, is37: false, suggestion: null }
+      }
+      if (rde.exercise_mode === '3-7') {
+        return { rde, isCardio: false, is37: true, suggestion: null }
       }
       const history = await getExerciseHistory(rde.exercise_id, 3)
       const suggestion = suggestProgression(
@@ -34,7 +37,7 @@ export async function startSession(routineDayId: string, userId: string): Promis
         },
         history,
       )
-      return { rde, isCardio: false, suggestion }
+      return { rde, isCardio: false, is37: false, suggestion }
     }),
   )
 
@@ -51,7 +54,7 @@ export async function startSession(routineDayId: string, userId: string): Promis
     })
 
     for (let pos = 0; pos < rdeData.length; pos++) {
-      const { rde, isCardio, suggestion } = rdeData[pos]
+      const { rde, isCardio, is37, suggestion } = rdeData[pos]
       const seId = crypto.randomUUID()
 
       await db.session_exercises.add({
@@ -82,6 +85,27 @@ export async function startSession(routineDayId: string, userId: string): Promis
           updated_at: now,
           deleted_at: null,
         })
+      } else if (is37) {
+        // 3-7 method: 2 rounds of 3→4→5→6→7 reps (10 sets total), same weight
+        const reps37 = [3, 4, 5, 6, 7, 3, 4, 5, 6, 7]
+        for (let i = 0; i < reps37.length; i++) {
+          await db.sets.add({
+            id: crypto.randomUUID(),
+            session_exercise_id: seId,
+            set_index: i,
+            is_warmup: false,
+            planned_reps: reps37[i],
+            planned_weight_kg: rde.target_weight_kg ?? null,
+            reps: reps37[i],
+            weight_kg: rde.target_weight_kg ?? null,
+            rpe: null,
+            completed: false,
+            notes: null,
+            duration_min: null,
+            updated_at: now,
+            deleted_at: null,
+          })
+        }
       } else {
         for (let i = 0; i < rde.target_sets; i++) {
           await db.sets.add({

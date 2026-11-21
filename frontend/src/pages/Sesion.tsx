@@ -233,6 +233,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
         : undefined,
     [routineDayId, se.exercise_id],
   )
+  const is37 = rde?.exercise_mode === '3-7'
   const [lastSummary, setLastSummary] = useState<LastSessionSummary | null>(null)
   const [suggestion, setSuggestion] = useState<ProgressionResult | null>(null)
   const [showNote, setShowNote] = useState(false)
@@ -246,7 +247,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
   }, [se.exercise_id, sessionId])
 
   useEffect(() => {
-    if (!exercise || !rde || isEditing || exercise.exercise_type === 'cardio') return
+    if (!exercise || !rde || isEditing || exercise.exercise_type === 'cardio' || rde.exercise_mode === '3-7') return
     getExerciseHistory(se.exercise_id, 3, sessionId).then((history) => {
       setSuggestion(suggestProgression(
         {
@@ -266,7 +267,7 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
 
   useEffect(() => {
     if (!rde?.target_weight_kg || !sets || !exercise) return
-    if (exercise.exercise_type === 'cardio') return
+    if (exercise.exercise_type === 'cardio' || rde.exercise_mode === '3-7') return
     const targetSets = rde.target_sets ?? 1
     if (completedCount < targetSets) return
     if (promptedRef.current) return
@@ -335,8 +336,9 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
             <h3 className="text-gray-900 font-bold text-base leading-tight">{exercise.name}</h3>
             {!isCardio && rde && (
               <p className="text-emerald-600 text-xs mt-0.5">
-                Objetivo: {rde.target_sets}×{rde.rep_min}–{rde.rep_max} reps
-                {rde.target_weight_kg != null && ` · ${rde.target_weight_kg} kg`}
+                {is37
+                  ? <>2 rondas · 3→7 reps{rde.target_weight_kg != null && ` · ${rde.target_weight_kg} kg`} <span className="text-indigo-500 font-semibold">3-7</span></>
+                  : <>Objetivo: {rde.target_sets}×{rde.rep_min}–{rde.rep_max} reps{rde.target_weight_kg != null && ` · ${rde.target_weight_kg} kg`}</>}
               </p>
             )}
             {!isCardio && lastSummary && (
@@ -396,6 +398,8 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
           metValue={exercise.met_value ?? 5.0}
           weightKg={userWeightKg}
         />
+      ) : is37 ? (
+        <ThirtySevenPanel sets={sets ?? []} seId={se.id} />
       ) : (
         <>
           {/* Cabecera columnas */}
@@ -416,9 +420,9 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
         </>
       )}
 
-      {/* Pie: añadir serie (solo fuerza) + guardar + eliminar ejercicio */}
+      {/* Pie: añadir serie (solo fuerza normal) + guardar + eliminar ejercicio */}
       <div className="px-4 py-3 flex items-center justify-between">
-        {!isCardio ? (
+        {!isCardio && !is37 ? (
           <button
             onClick={() => addSet(se.id)}
             className="text-indigo-600 text-sm hover:text-indigo-500"
@@ -633,6 +637,165 @@ async function addSet(sessionExerciseId: string) {
     updated_at: now,
     deleted_at: null,
   })
+}
+
+// ── Panel método 3-7 ────────────────────────────────────────────────────────
+
+function ThirtySevenPanel({ sets, seId: _seId }: { sets: SetRecord[]; seId: string }) {
+  const sharedWeight = sets[0]?.weight_kg ?? null
+  const [completionTimes, setCompletionTimes] = useState<Map<string, number>>(new Map())
+  const prevCompletedRef = useRef<Set<string>>(new Set(sets.filter((s) => s.completed).map((s) => s.id)))
+
+  useEffect(() => {
+    const newlyCompleted: string[] = []
+    for (const s of sets) {
+      if (s.completed && !prevCompletedRef.current.has(s.id)) newlyCompleted.push(s.id)
+    }
+    if (newlyCompleted.length > 0) {
+      const now = Date.now()
+      setCompletionTimes((prev) => {
+        const next = new Map(prev)
+        newlyCompleted.forEach((id) => next.set(id, now))
+        return next
+      })
+    }
+    prevCompletedRef.current = new Set(sets.filter((s) => s.completed).map((s) => s.id))
+  }, [sets])
+
+  async function updateAllWeights(weight: number | null) {
+    const now = new Date().toISOString()
+    for (const s of sets) await db.sets.update(s.id, { weight_kg: weight, updated_at: now })
+  }
+
+  const round1 = sets.slice(0, 5)
+  const round2 = sets.slice(5, 10)
+
+  return (
+    <div>
+      {/* Peso compartido */}
+      <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100">
+        <span className="text-xs text-gray-500 w-16 shrink-0">Peso (kg)</span>
+        <button
+          onClick={() => updateAllWeights(Math.max(0, (sharedWeight ?? 0) - 0.5))}
+          className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700 active:bg-gray-200 min-h-[44px] min-w-[44px]"
+        >−</button>
+        <input
+          type="number" inputMode="decimal" value={sharedWeight ?? ''}
+          onChange={(e) => updateAllWeights(e.target.value ? parseFloat(e.target.value) : null)}
+          className="w-16 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm text-center py-1.5 focus:outline-none focus:border-indigo-500"
+        />
+        <button
+          onClick={() => updateAllWeights((sharedWeight ?? 0) + 0.5)}
+          className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700 active:bg-gray-200 min-h-[44px] min-w-[44px]"
+        >+</button>
+      </div>
+
+      {/* Ronda 1 */}
+      <div className="px-4 pt-2 pb-0.5">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Ronda 1</p>
+      </div>
+      {round1.map((set, i) => (
+        <div key={set.id}>
+          <ThirtySevenSetRow set={set} />
+          {i < 4 && completionTimes.has(set.id) && (
+            <RestTimer startTime={completionTimes.get(set.id)!} durationSec={15} />
+          )}
+        </div>
+      ))}
+
+      {/* Descanso entre rondas */}
+      {round1[4]?.completed && (
+        <div className="mx-4 my-2 py-2 px-3 bg-indigo-50 rounded-xl text-indigo-600 text-xs text-center font-medium">
+          ⏸ Descanso entre rondas · 1–2 min
+        </div>
+      )}
+
+      {/* Ronda 2 */}
+      <div className="px-4 pt-1 pb-0.5">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Ronda 2</p>
+      </div>
+      {round2.map((set, i) => (
+        <div key={set.id}>
+          <ThirtySevenSetRow set={set} />
+          {i < 4 && completionTimes.has(set.id) && (
+            <RestTimer startTime={completionTimes.get(set.id)!} durationSec={15} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ThirtySevenSetRow({ set }: { set: SetRecord }) {
+  const [showRPE, setShowRPE] = useState(false)
+  const rpeOptions = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
+
+  async function toggleComplete() {
+    await db.sets.update(set.id, { completed: !set.completed, updated_at: new Date().toISOString() })
+  }
+  async function setRPE(rpe: number | null) {
+    await db.sets.update(set.id, { rpe, updated_at: new Date().toISOString() })
+    setShowRPE(false)
+  }
+
+  return (
+    <div className={`px-4 ${set.completed ? 'bg-green-50' : ''}`}>
+      <div className="flex items-center gap-3 py-2">
+        <span className="text-3xl font-black text-gray-200 w-10 text-center tabular-nums leading-none">
+          {set.planned_reps ?? set.reps}
+        </span>
+        <span className="text-xs text-gray-400">reps</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowRPE(!showRPE)}
+            className={`text-xs px-2 py-1 rounded-lg min-h-[32px] ${set.rpe != null ? 'bg-amber-50 text-amber-700' : 'text-gray-300 hover:text-gray-500'}`}
+          >
+            {set.rpe != null ? `RPE ${set.rpe}` : 'RPE'}
+          </button>
+          <button
+            onClick={toggleComplete}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold min-h-[44px] min-w-[44px] transition-colors ${
+              set.completed ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+            }`}
+          >✓</button>
+        </div>
+      </div>
+      {showRPE && (
+        <div className="flex flex-wrap gap-1.5 pb-2">
+          {rpeOptions.map((v) => (
+            <button key={v} onClick={() => setRPE(v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono min-h-[36px] ${set.rpe === v ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {v}
+            </button>
+          ))}
+          <button onClick={() => setRPE(null)} className="px-3 py-1.5 rounded-lg text-xs text-gray-400 bg-gray-100 min-h-[36px]">
+            Quitar
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RestTimer({ startTime, durationSec }: { startTime: number; durationSec: number }) {
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, durationSec - (Date.now() - startTime) / 1000)
+  )
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRemaining(Math.max(0, durationSec - (Date.now() - startTime) / 1000))
+    }, 200)
+    return () => clearInterval(interval)
+  }, [startTime, durationSec])
+
+  if (remaining <= 0) return null
+  return (
+    <div className="flex items-center justify-center gap-1.5 py-1 text-indigo-500">
+      <span className="text-xs animate-pulse">⏱</span>
+      <span className="font-mono text-sm font-bold">{Math.ceil(remaining)}</span>
+      <span className="text-xs text-gray-400">s</span>
+    </div>
+  )
 }
 
 // ── Fila de serie ───────────────────────────────────────────────────────────

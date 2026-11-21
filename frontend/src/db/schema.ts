@@ -47,6 +47,7 @@ export interface RoutineDayExercise {
   routine_day_id: string
   exercise_id: string
   position: number
+  exercise_mode: string  // 'normal' | '3-7'
   target_sets: number
   rep_min: number
   rep_max: number

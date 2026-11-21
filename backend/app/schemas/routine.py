@@ -42,6 +42,7 @@ class RoutineDayRead(RoutineDayBase):
 class RoutineDayExerciseBase(BaseModel):
     exercise_id: str
     position: int = 0
+    exercise_mode: str = "normal"
     target_sets: int = 3
     rep_min: int = 8
     rep_max: int = 12

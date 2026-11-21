@@ -271,7 +271,7 @@ function DaySection({ day, onDelete, onMoveUp, onMoveDown }: {
     const now = new Date().toISOString()
     const position = rdes?.length ?? 0
     const target_weight_kg = addWeight ? parseFloat(addWeight) : null
-    const payload = { id, routine_day_id: day.id, exercise_id: addExId, position, target_sets: addSets, rep_min: addRepMin, rep_max: addRepMax, target_weight_kg, target_rpe: null, notes: null, updated_at: now, deleted_at: null }
+    const payload = { id, routine_day_id: day.id, exercise_id: addExId, position, exercise_mode: 'normal', target_sets: addSets, rep_min: addRepMin, rep_max: addRepMax, target_weight_kg, target_rpe: null, notes: null, updated_at: now, deleted_at: null }
     await db.routine_day_exercises.add(payload)
     await db.outbox.add({ table: 'routine_day_exercises', record_id: id, op: 'upsert', payload, ts: now })
     setAddExId('')

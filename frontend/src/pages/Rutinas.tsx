@@ -261,11 +261,13 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
   const [repMax, setRepMax] = useState(12)
   const [targetWeight, setTargetWeight] = useState('')
   const [saving, setSaving] = useState(false)
+  const [exerciseMode, setExerciseMode] = useState<'normal' | '3-7'>('normal')
   const [editingRDE, setEditingRDE] = useState<string | null>(null)
   const [editSets, setEditSets] = useState(3)
   const [editRepMin, setEditRepMin] = useState(8)
   const [editRepMax, setEditRepMax] = useState(12)
   const [editTargetWeight, setEditTargetWeight] = useState('')
+  const [editExerciseMode, setEditExerciseMode] = useState<'normal' | '3-7'>('normal')
 
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 
@@ -304,16 +306,17 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
     const now = new Date().toISOString()
     const position = rdes?.length ?? 0
     const target_weight_kg = targetWeight ? parseFloat(targetWeight) : null
-    const payload = { id, routine_day_id: day.id, exercise_id: selectedEx, position, target_sets: sets, rep_min: repMin, rep_max: repMax, target_weight_kg, target_rpe: null, notes: null }
+    const payload = { id, routine_day_id: day.id, exercise_id: selectedEx, position, exercise_mode: exerciseMode, target_sets: sets, rep_min: repMin, rep_max: repMax, target_weight_kg, target_rpe: null, notes: null }
     await db.routine_day_exercises.add({ ...payload, updated_at: now, deleted_at: null })
     try {
-      await apiFetch(`/routines/${routineId}/days/${day.id}/exercises`, { method: 'POST', body: JSON.stringify({ id, exercise_id: selectedEx, position, target_sets: sets, rep_min: repMin, rep_max: repMax }) })
+      await apiFetch(`/routines/${routineId}/days/${day.id}/exercises`, { method: 'POST', body: JSON.stringify({ id, exercise_id: selectedEx, position, exercise_mode: exerciseMode, target_sets: sets, rep_min: repMin, rep_max: repMax }) })
     } catch {
       await db.outbox.add({ table: 'routine_day_exercises', record_id: id, op: 'upsert', payload, ts: now })
     }
     setSelectedEx('')
     setSelectedExObj(null)
     setTargetWeight('')
+    setExerciseMode('normal')
     setShowAdd(false)
     setSaving(false)
   }
@@ -330,13 +333,14 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
     setEditRepMin(rde.rep_min)
     setEditRepMax(rde.rep_max)
     setEditTargetWeight(rde.target_weight_kg != null ? String(rde.target_weight_kg) : '')
+    setEditExerciseMode((rde.exercise_mode as 'normal' | '3-7') ?? 'normal')
   }
 
   async function saveEditRDE(rde: RoutineDayExercise) {
     const now = new Date().toISOString()
     const target_weight_kg = editTargetWeight ? parseFloat(editTargetWeight) : null
-    const updated = { ...rde, target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now }
-    await db.routine_day_exercises.update(rde.id, { target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now })
+    const updated = { ...rde, exercise_mode: editExerciseMode, target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now }
+    await db.routine_day_exercises.update(rde.id, { exercise_mode: editExerciseMode, target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now })
     await db.outbox.add({ table: 'routine_day_exercises', record_id: rde.id, op: 'upsert', payload: updated, ts: now })
     setEditingRDE(null)
   }
@@ -403,6 +407,24 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
               return (
                 <div key={rde.id} ref={(el) => { itemRefs.current[index] = el }} className="bg-slate-50 rounded-lg border border-gray-100 px-3 py-2.5">
                   <p className="text-gray-900 text-xs font-semibold mb-2">{ex.name}</p>
+                  {/* Mode toggle */}
+                  <div className="flex gap-1 mb-2.5">
+                    {(['normal', '3-7'] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => setEditExerciseMode(m)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium min-h-[32px] ${editExerciseMode === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                        {m === 'normal' ? 'Normal' : '3-7'}
+                      </button>
+                    ))}
+                  </div>
+                  {editExerciseMode === '3-7' ? (
+                    <div className="flex items-center gap-1.5 mb-2.5">
+                      <p className="text-indigo-600 text-xs flex-1">2 rondas · 3→7 reps</p>
+                      <input type="number" inputMode="decimal" value={editTargetWeight} onChange={(e) => setEditTargetWeight(e.target.value)}
+                        min={0} step={0.5} placeholder="—"
+                        className="w-16 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">kg</span>
+                    </div>
+                  ) : (
                   <div className="flex gap-2 flex-wrap items-center mb-2.5">
                     <div className="flex gap-1 items-center">
                       <input type="number" inputMode="numeric" value={editSets} onChange={(e) => setEditSets(+e.target.value)} min={1} max={10}
@@ -424,6 +446,7 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
                       <span className="text-gray-400 text-xs">kg</span>
                     </div>
                   </div>
+                  )}
                   <div className="flex justify-end gap-2">
                     <button type="button" onClick={() => setEditingRDE(null)} className="text-gray-400 text-xs px-3 py-1.5 min-h-[36px]">Cancelar</button>
                     <button type="button" onClick={() => saveEditRDE(rde)} className="bg-indigo-600 text-white text-xs px-4 py-1.5 rounded-lg min-h-[36px]">Guardar</button>
@@ -438,9 +461,16 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
                 className="bg-slate-50 rounded-lg border border-gray-100 px-3 py-2 flex items-center gap-1.5"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-gray-900 text-xs font-medium">{ex.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-gray-900 text-xs font-medium">{ex.name}</p>
+                    {rde.exercise_mode === '3-7' && (
+                      <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">3-7</span>
+                    )}
+                  </div>
                   <p className="text-gray-500 text-xs">
-                    {rde.target_sets} series · {rde.rep_min}–{rde.rep_max} reps
+                    {rde.exercise_mode === '3-7'
+                      ? '2 rondas · 3→7 reps'
+                      : `${rde.target_sets} series · ${rde.rep_min}–${rde.rep_max} reps`}
                     {rde.target_weight_kg != null && <span className="ml-1 text-emerald-600">· {rde.target_weight_kg} kg</span>}
                   </p>
                 </div>
@@ -484,6 +514,24 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
 
               {selectedExObj && (
                 <>
+                  {/* Mode toggle */}
+                  <div className="flex gap-1">
+                    {(['normal', '3-7'] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => setExerciseMode(m)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium min-h-[32px] ${exerciseMode === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                        {m === 'normal' ? 'Normal' : '3-7'}
+                      </button>
+                    ))}
+                  </div>
+                  {exerciseMode === '3-7' ? (
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-indigo-600 text-xs flex-1">2 rondas · 3→7 reps</p>
+                      <input type="number" inputMode="decimal" value={targetWeight} onChange={(e) => setTargetWeight(e.target.value)}
+                        min={0} step={0.5} placeholder="—"
+                        className="w-16 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                      <span className="text-gray-400 text-xs">kg</span>
+                    </div>
+                  ) : (
                   <div className="flex gap-2 flex-wrap">
                     <div className="flex gap-1 items-center">
                       <input type="number" inputMode="numeric" value={sets} onChange={(e) => setSets(+e.target.value)} min={1} max={10} className="w-12 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
@@ -509,6 +557,7 @@ function DayDetail({ day, routineId, onDelete, onMoveUp, onMoveDown }: {
                       <span className="text-gray-400 text-xs">kg</span>
                     </div>
                   </div>
+                  )}
                   <div className="flex justify-end gap-2">
                     <button type="button" onClick={() => setShowAdd(false)} className="text-gray-400 text-xs px-3 py-1.5">Cancelar</button>
                     <button type="submit" disabled={saving} className="bg-indigo-600 text-white text-xs px-4 py-1.5 rounded-lg">

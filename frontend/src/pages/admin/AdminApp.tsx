@@ -5,7 +5,7 @@ import SyncBadge from '../../components/SyncBadge'
 import AdminRutinas from './AdminRutinas'
 import AdminCatalogo from './AdminCatalogo'
 import AdminIA from './AdminIA'
-import Progreso from '../Progreso'
+import AdminProgreso from './AdminProgreso'
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL as string | undefined
 
@@ -50,7 +50,7 @@ function AdminShell() {
           <Route index element={<Navigate to="rutinas" replace />} />
           <Route path="rutinas" element={<AdminRutinas />} />
           <Route path="catalogo" element={<AdminCatalogo />} />
-          <Route path="progreso" element={<Progreso />} />
+          <Route path="progreso" element={<AdminProgreso />} />
           <Route path="ia" element={<AdminIA />} />
         </Routes>
       </main>

@@ -37,6 +37,7 @@ class RoutineDayExercise(Base, TimestampMixin):
         String(36), ForeignKey("exercises.id"), nullable=False
     )
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    exercise_mode: Mapped[str] = mapped_column(String(20), default="normal", nullable=False, server_default="normal")
     target_sets: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     rep_min: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     rep_max: Mapped[int] = mapped_column(Integer, default=12, nullable=False)

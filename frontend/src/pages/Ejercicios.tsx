@@ -447,7 +447,7 @@ function AddToRoutineSheet({ exercise, onClose }: { exercise: Exercise; onClose:
     const [repMin, repMax] = parseRepRange(exercise.default_rep_range)
     await db.routine_day_exercises.add({
       id, routine_day_id: dayId, exercise_id: exercise.id, position: count,
-      target_sets: 3, rep_min: repMin, rep_max: repMax,
+      exercise_mode: 'normal', target_sets: 3, rep_min: repMin, rep_max: repMax,
       target_weight_kg: null, target_rpe: null, notes: null,
       updated_at: now, deleted_at: null,
     })
@@ -468,7 +468,7 @@ function AddToRoutineSheet({ exercise, onClose }: { exercise: Exercise; onClose:
     await db.transaction('rw', [db.routines, db.routine_days, db.routine_day_exercises, db.outbox], async () => {
       await db.routines.add({ id: routineId, user_id: user.id, name: newName.trim(), is_active: true, start_date: null, duration_weeks: null, updated_at: now, deleted_at: null })
       await db.routine_days.add({ id: dayId, routine_id: routineId, name: 'Día A', position: 0, updated_at: now, deleted_at: null })
-      await db.routine_day_exercises.add({ id: rdeId, routine_day_id: dayId, exercise_id: exercise.id, position: 0, target_sets: 3, rep_min: repMin, rep_max: repMax, target_weight_kg: null, target_rpe: null, notes: null, updated_at: now, deleted_at: null })
+      await db.routine_day_exercises.add({ id: rdeId, routine_day_id: dayId, exercise_id: exercise.id, position: 0, exercise_mode: 'normal', target_sets: 3, rep_min: repMin, rep_max: repMax, target_weight_kg: null, target_rpe: null, notes: null, updated_at: now, deleted_at: null })
     })
     setSaving(false)
     onClose()
