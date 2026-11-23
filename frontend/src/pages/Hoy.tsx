@@ -115,24 +115,29 @@ export default function Hoy() {
 
       {/* Banner de sesión en curso — aparece si la app se cerró a mitad de sesión */}
       {sessionInProgress && (
-        <button
-          onClick={() => navigate(`/sesion/${sessionInProgress.id}`)}
-          className="w-full bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 flex items-center gap-3 text-left"
-        >
-          <span className="text-2xl">⏱️</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-amber-800 font-semibold text-sm">Sesión en curso</p>
-            <p className="text-amber-600 text-xs mt-0.5">
-              Iniciada a las{' '}
-              {new Date(sessionInProgress.started_at).toLocaleTimeString('es-ES', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-              {' · '}Toca para continuar
-            </p>
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+          <button
+            onClick={() => navigate(`/sesion/${sessionInProgress.id}`)}
+            className="w-full px-4 py-4 flex items-center gap-3 text-left"
+          >
+            <span className="text-2xl">⏱️</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-amber-800 font-semibold text-sm">Sesión en curso</p>
+              <p className="text-amber-600 text-xs mt-0.5">
+                Iniciada a las{' '}
+                {new Date(sessionInProgress.started_at).toLocaleTimeString('es-ES', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                {' · '}Toca para continuar
+              </p>
+            </div>
+            <span className="text-amber-400 text-lg">▶</span>
+          </button>
+          <div className="border-t border-amber-200 px-4 py-2 flex justify-end">
+            <CancelSessionButton sessionId={sessionInProgress.id} />
           </div>
-          <span className="text-amber-400 text-lg">▶</span>
-        </button>
+        </div>
       )}
 
       {activeRoutine === undefined || days === undefined ? (
@@ -223,5 +228,46 @@ function EmptyState() {
   )
 }
 
-// useState necesita import — añadir aquí
 import { useState } from 'react'
+
+function CancelSessionButton({ sessionId }: { sessionId: string }) {
+  const [confirm, setConfirm] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  async function cancel() {
+    setCancelling(true)
+    const now = new Date().toISOString()
+    const ses = await db.session_exercises
+      .filter((se) => se.session_id === sessionId && !se.deleted_at)
+      .toArray()
+    for (const se of ses) {
+      const allSets = await db.sets.filter((s) => s.session_exercise_id === se.id).toArray()
+      for (const s of allSets) {
+        await db.sets.update(s.id, { deleted_at: now, updated_at: now })
+        await db.outbox.add({ table: 'sets', record_id: s.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+      }
+      await db.session_exercises.update(se.id, { deleted_at: now, updated_at: now })
+      await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'delete', payload: { deleted_at: now }, ts: now })
+    }
+    await db.sessions.update(sessionId, { deleted_at: now, updated_at: now })
+    await db.outbox.add({ table: 'sessions', record_id: sessionId, op: 'delete', payload: { deleted_at: now }, ts: now })
+    setCancelling(false)
+  }
+
+  if (!confirm) {
+    return (
+      <button onClick={() => setConfirm(true)} className="text-amber-600 text-xs font-medium min-h-[36px] px-2 hover:text-red-600">
+        Cancelar sesión
+      </button>
+    )
+  }
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-amber-700">¿Seguro? Se borrará sin guardar.</span>
+      <button onClick={() => setConfirm(false)} className="text-gray-500 text-xs min-h-[36px] px-2">No</button>
+      <button onClick={cancel} disabled={cancelling} className="text-red-600 text-xs font-semibold min-h-[36px] px-2 disabled:opacity-50">
+        {cancelling ? '...' : 'Sí, borrar'}
+      </button>
+    </div>
+  )
+}

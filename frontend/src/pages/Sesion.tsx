@@ -233,7 +233,12 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
         : undefined,
     [routineDayId, se.exercise_id],
   )
-  const is37 = rde?.exercise_mode === '3-7'
+  const [localMode, setLocalMode] = useState<'normal' | '3-7' | null>(null)
+  useEffect(() => {
+    if (rde && localMode === null) setLocalMode((rde.exercise_mode as 'normal' | '3-7') ?? 'normal')
+  }, [rde?.id])
+  const is37 = (localMode ?? rde?.exercise_mode ?? 'normal') === '3-7'
+
   const [lastSummary, setLastSummary] = useState<LastSessionSummary | null>(null)
   const [suggestion, setSuggestion] = useState<ProgressionResult | null>(null)
   const [showNote, setShowNote] = useState(false)
@@ -325,6 +330,40 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
     await db.outbox.add({ table: 'session_exercises', record_id: se.id, op: 'delete', payload: { deleted_at: now }, ts: now })
   }
 
+  async function switchMode(newMode: 'normal' | '3-7') {
+    if (!rde || newMode === localMode) return
+    const now = new Date().toISOString()
+    const existing = await db.sets.filter((s) => s.session_exercise_id === se.id && !s.deleted_at).toArray()
+    for (const s of existing) {
+      await db.sets.update(s.id, { deleted_at: now, updated_at: now })
+    }
+    if (newMode === '3-7') {
+      const reps37 = [3, 4, 5, 6, 7, 3, 4, 5, 6, 7]
+      for (let i = 0; i < reps37.length; i++) {
+        await db.sets.add({
+          id: crypto.randomUUID(), session_exercise_id: se.id, set_index: i,
+          is_warmup: false, planned_reps: reps37[i], planned_weight_kg: rde.target_weight_kg ?? null,
+          reps: reps37[i], weight_kg: rde.target_weight_kg ?? null,
+          rpe: null, completed: false, notes: null, duration_min: null,
+          updated_at: now, deleted_at: null,
+        })
+      }
+    } else {
+      for (let i = 0; i < rde.target_sets; i++) {
+        await db.sets.add({
+          id: crypto.randomUUID(), session_exercise_id: se.id, set_index: i,
+          is_warmup: false, planned_reps: rde.rep_max ?? null, planned_weight_kg: rde.target_weight_kg ?? null,
+          reps: rde.rep_max ?? null, weight_kg: rde.target_weight_kg ?? null,
+          rpe: null, completed: false, notes: null, duration_min: null,
+          updated_at: now, deleted_at: null,
+        })
+      }
+    }
+    setLocalMode(newMode)
+    promptedRef.current = false
+    setUpdatePrompt(null)
+  }
+
   if (!exercise) return null
 
   return (
@@ -364,13 +403,27 @@ function ExerciseCard({ sessionExercise: se, sessionId, routineDayId, isEditing,
               <p className="text-gray-400 text-xs mt-0.5 line-clamp-1">{exercise.setup_tips}</p>
             )}
           </div>
-          <div className="shrink-0 text-right">
+          <div className="shrink-0 text-right flex flex-col items-end gap-1">
             {!isCardio && (
               <span className="text-xs text-gray-400">{completedCount}/{totalCount} series</span>
             )}
+            {!isCardio && !isEditing && rde && (
+              <div className="flex gap-1">
+                {(['normal', '3-7'] as const).map((m) => (
+                  <button key={m} onClick={() => switchMode(m)}
+                    className={`text-[10px] px-2 py-0.5 rounded-md font-semibold min-h-[26px] transition-colors ${
+                      (localMode ?? rde.exercise_mode ?? 'normal') === m
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                    }`}>
+                    {m === 'normal' ? 'Normal' : '3-7'}
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               onClick={() => setShowNote(!showNote)}
-              className="block text-gray-400 text-xs mt-1 hover:text-gray-600"
+              className="text-gray-400 text-xs hover:text-gray-600"
             >
               {se.notes ? '📝 nota' : '+ nota'}
             </button>
