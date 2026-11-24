@@ -102,12 +102,31 @@ def _fetch_sessions(db: Session, user_id: str, since: datetime, until: datetime 
 
             # planned_weight from first non-warmup set (copied from routine at session start)
             planned = next((s.planned_weight_kg for s in sets if s.planned_weight_kg is not None), None)
+
+            # --- Aggregates for chart context ---
+            volume = sum(
+                (s.weight_kg or 0) * (s.reps or 0) for s in sets if s.weight_kg and s.reps
+            )
+            rpe_vals = [float(s.rpe) for s in sets if s.rpe is not None]
+            best_e1rm = max(
+                (s.weight_kg * (1 + s.reps / 30) for s in sets if s.weight_kg and s.reps and s.reps <= 20),
+                default=0.0,
+            )
+            sets_completed = sum(1 for s in sets if s.completed)
+            sets_total = len(sets)
+
             exercises_data.append({
                 "name": ex.name,
                 "muscle": ex.primary_muscle,
                 "sets": sets_str,
                 "planned_weight_kg": planned,
                 "notes": se.notes,
+                # chart aggregates
+                "volume_kg": round(volume, 1) if volume else None,
+                "best_e1rm": round(best_e1rm, 1) if best_e1rm else None,
+                "avg_rpe": round(sum(rpe_vals) / len(rpe_vals), 1) if rpe_vals else None,
+                "sets_completed": sets_completed,
+                "sets_total": sets_total,
             })
 
         if not exercises_data:
@@ -231,13 +250,19 @@ def ai_summary(
     )
     prompt = (
         f"{context}\n\n"
-        "El usuario ya sabe lo que hizo — NO lo repitas ni lo resumas. "
-        "Ve directo al análisis: compara el período actual con el anterior ejercicio por ejercicio. "
-        "Indica claramente si mejoró, empeoró o se mantuvo, y en qué concretamente (peso, reps, adherencia a la rutina). "
-        "Compara también los pesos reales vs los objetivos de la rutina. "
-        "Mira el objetivo del usuario y da recomendaciones accionables de progresión. "
+        "El usuario ya sabe lo que hizo — NO repitas ni resumas las sesiones. "
+        "Tienes dos fuentes de datos: el detalle crudo de cada sesión Y las estadísticas agregadas "
+        "(duración, volumen, e1RM estimado, RPE, distribución muscular) que son exactamente lo que "
+        "muestran los gráficos de la app. Úsalas ambas para hacer un análisis más rico.\n\n"
+        "Ve directo al análisis:\n"
+        "- Compara el período actual con el anterior: adherencia, duración media, volumen total, RPE.\n"
+        "- Comenta las tendencias de e1RM por ejercicio (▲▼→ según los datos).\n"
+        "- Señala qué grupos musculares recibieron más/menos volumen y si el balance es adecuado para el objetivo.\n"
+        "- Compara pesos reales vs objetivos de la rutina.\n"
+        "- Da recomendaciones accionables de progresión basadas en los datos.\n"
         "Sé directo, motivador y conciso. No uses relleno.\n\n"
         "Proporciona el informe con estas secciones (usa ## para los títulos):\n"
+        "## Tendencias y estadísticas clave\n"
         "## Progreso vs período anterior\n"
         "## Pesos vs objetivos de la rutina\n"
         "## Recomendaciones de progresión\n"
@@ -376,6 +401,75 @@ def adjust_target_weights(
     return {"updated": updated, "skipped": skipped}
 
 
+def _compute_chart_stats(sessions: list[dict[str, Any]]) -> str:
+    """Derive the same aggregates shown in AdminProgreso charts."""
+    if not sessions:
+        return "  Sin sesiones en este período."
+
+    lines: list[str] = []
+
+    # --- Duración por sesión ---
+    durations = [(s["date"], s["duration_min"]) for s in sessions if s.get("duration_min")]
+    if durations:
+        avg_dur = round(sum(d for _, d in durations) / len(durations))
+        dur_list = ", ".join(f"{d}: {m} min" for d, m in durations[-5:])
+        lines.append(f"  Duración promedio: {avg_dur} min | Últimas sesiones: {dur_list}")
+
+    # --- Sets completadas por sesión ---
+    for s in sessions:
+        total_c = sum(ex.get("sets_completed", 0) for ex in s["exercises"])
+        total_t = sum(ex.get("sets_total", 0) for ex in s["exercises"])
+        if total_t:
+            pct = round(100 * total_c / total_t)
+            lines.append(f"  {s['date']} — {s['day_name']}: {total_c}/{total_t} series completadas ({pct}%)")
+
+    # --- Volumen total por sesión ---
+    vol_sessions = [
+        (s["date"], sum(ex.get("volume_kg") or 0 for ex in s["exercises"]))
+        for s in sessions
+    ]
+    vol_sessions = [(d, v) for d, v in vol_sessions if v > 0]
+    if vol_sessions:
+        lines.append("  Volumen por sesión (kg×reps): " + ", ".join(f"{d}: {int(v)}" for d, v in vol_sessions))
+
+    # --- e1RM mejor por ejercicio (tendencia) ---
+    e1rm_by_ex: dict[str, list[tuple[str, float]]] = {}
+    for s in sessions:
+        for ex in s["exercises"]:
+            if ex.get("best_e1rm"):
+                e1rm_by_ex.setdefault(ex["name"], []).append((s["date"], ex["best_e1rm"]))
+    if e1rm_by_ex:
+        lines.append("  Tendencia e1RM estimado por ejercicio:")
+        for name, pts in e1rm_by_ex.items():
+            if len(pts) == 1:
+                lines.append(f"    {name}: {pts[0][1]} kg ({pts[0][0]})")
+            else:
+                first_val, last_val = pts[0][1], pts[-1][1]
+                trend = "▲" if last_val > first_val else ("▼" if last_val < first_val else "→")
+                lines.append(f"    {name}: {first_val} → {last_val} kg {trend}")
+
+    # --- RPE promedio por sesión ---
+    rpe_sessions: list[tuple[str, float]] = []
+    for s in sessions:
+        rpes = [ex["avg_rpe"] for ex in s["exercises"] if ex.get("avg_rpe") is not None]
+        if rpes:
+            rpe_sessions.append((s["date"], round(sum(rpes) / len(rpes), 1)))
+    if rpe_sessions:
+        lines.append("  RPE promedio por sesión: " + ", ".join(f"{d}: {r}" for d, r in rpe_sessions))
+
+    # --- Volumen por músculo ---
+    muscle_vol: dict[str, float] = {}
+    for s in sessions:
+        for ex in s["exercises"]:
+            if ex.get("volume_kg"):
+                muscle_vol[ex["muscle"]] = muscle_vol.get(ex["muscle"], 0) + ex["volume_kg"]
+    if muscle_vol:
+        sorted_muscles = sorted(muscle_vol.items(), key=lambda x: x[1], reverse=True)
+        lines.append("  Volumen por músculo principal: " + " | ".join(f"{m}: {int(v)} kg" for m, v in sorted_muscles[:6]))
+
+    return "\n".join(lines) if lines else "  Sin datos suficientes para calcular estadísticas."
+
+
 def _fmt_sessions(sessions: list[dict[str, Any]]) -> list[str]:
     lines: list[str] = []
     for s in sessions:
@@ -427,18 +521,26 @@ def _build_context(
                     lines.append(f"      - {ex_line}")
 
     # --- Current period ---
-    lines.append(f"\n=== PERÍODO ACTUAL (últimas {weeks} semana/s) ===")
+    lines.append(f"\n=== PERÍODO ACTUAL (últimas {weeks} semana/s) — detalle sesión a sesión ===")
     if current:
         lines += _fmt_sessions(current)
     else:
         lines.append("  Sin sesiones registradas.")
 
+    # --- Chart stats for current period ---
+    lines.append(f"\n=== ESTADÍSTICAS AGREGADAS DEL PERÍODO ACTUAL (equivalente a los gráficos) ===")
+    lines.append(_compute_chart_stats(current))
+
     # --- Previous period ---
-    lines.append(f"\n=== PERÍODO ANTERIOR ({weeks} semana/s previas) ===")
+    lines.append(f"\n=== PERÍODO ANTERIOR ({weeks} semana/s previas) — detalle sesión a sesión ===")
     if prev:
         lines += _fmt_sessions(prev)
     else:
         lines.append("  Sin sesiones registradas.")
+
+    # --- Chart stats for previous period ---
+    lines.append(f"\n=== ESTADÍSTICAS AGREGADAS DEL PERÍODO ANTERIOR ===")
+    lines.append(_compute_chart_stats(prev))
 
     # --- Body metrics (both periods) ---
     if metrics:
