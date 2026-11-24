@@ -298,43 +298,77 @@ function MuscleVolumeChart({ userId }: { userId: string }) {
 function E1RMChart({ exerciseId, userId }: { exerciseId: string; userId: string }) {
   const data = useLiveQuery(async () => {
     const sessions = await db.sessions.filter((s) => s.user_id === userId && !s.deleted_at).toArray()
-    const points: { date: string; e1rm: number }[] = []
+    const points: { date: string; e1rm: number | null; maxKg: number }[] = []
+    let sessionsWithExercise = 0
+
     for (const session of sessions) {
       const ses = await db.session_exercises
         .filter((se) => se.session_id === session.id && se.exercise_id === exerciseId && !se.deleted_at)
         .toArray()
       if (ses.length === 0) continue
-      let best = 0
+      sessionsWithExercise++
+
+      let bestE1rm = 0
+      let bestKg = 0
       for (const se of ses) {
         const sets = await db.sets
-          .filter((s) => s.session_exercise_id === se.id && !s.is_warmup && s.weight_kg != null && !s.deleted_at)
+          .filter((s) => s.session_exercise_id === se.id && !s.is_warmup && !s.deleted_at)
           .toArray()
         for (const s of sets) {
+          if (s.weight_kg && s.weight_kg > bestKg) bestKg = s.weight_kg
           if (s.weight_kg && s.reps && s.reps <= 20) {
             const e1rm = s.weight_kg * (1 + s.reps / 30)
-            if (e1rm > best) best = e1rm
+            if (e1rm > bestE1rm) bestE1rm = e1rm
           }
         }
       }
-      if (best > 0) points.push({ date: fmtDate(session.started_at), e1rm: Math.round(best * 10) / 10 })
+      if (bestKg > 0) {
+        points.push({
+          date: fmtDate(session.started_at),
+          e1rm: bestE1rm > 0 ? Math.round(bestE1rm * 10) / 10 : null,
+          maxKg: bestKg,
+        })
+      }
     }
     points.sort((a, b) => a.date > b.date ? 1 : -1)
-    return points
+    return { points, sessionsWithExercise, totalSessions: sessions.length }
   }, [exerciseId, userId])
 
   if (!data) return <div className="bg-gray-50 rounded-xl animate-pulse h-24" />
-  if (data.length === 0) return <p className="text-gray-400 text-xs text-center py-8">Sin datos de este ejercicio</p>
+
+  const { points, sessionsWithExercise, totalSessions } = data
+
+  if (points.length === 0) {
+    return (
+      <div className="py-6 text-center space-y-1">
+        <p className="text-gray-400 text-xs">Sin peso registrado para este ejercicio</p>
+        <p className="text-gray-300 text-xs">
+          {sessionsWithExercise > 0
+            ? `Aparece en ${sessionsWithExercise} sesión/es pero sin kg anotados`
+            : `No aparece en ninguna de las ${totalSessions} sesiones encontradas`}
+        </p>
+      </div>
+    )
+  }
+
+  const hasE1rm = points.some((p) => p.e1rm != null)
 
   return (
     <div style={{ height: 180 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+        <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
           <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} unit=" kg" />
           <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
-            formatter={(v) => [`${v} kg`, 'e1RM est.']} />
-          <Line type="monotone" dataKey="e1rm" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} />
+            formatter={(v, name) => [`${v} kg`, name === 'e1rm' ? 'e1RM est.' : 'Peso máx.']} />
+          <Line type="monotone" dataKey="maxKg" stroke="#94a3b8" strokeWidth={2}
+            strokeDasharray={hasE1rm ? '4 2' : undefined}
+            dot={{ r: 3, fill: '#94a3b8' }} name="maxKg" />
+          {hasE1rm && (
+            <Line type="monotone" dataKey="e1rm" stroke="#6366f1" strokeWidth={2}
+              dot={{ r: 3, fill: '#6366f1' }} name="e1rm" connectNulls />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
