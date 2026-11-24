@@ -99,7 +99,7 @@ function StatsPanel({ userId }: { userId: string }) {
         <StatCard label="Duración media" value={avgDuration != null ? `${avgDuration} min` : '—'} />
       </div>
 
-      {/* Frecuencia semanal + volumen por músculo en paralelo */}
+      {/* Frecuencia + duración en paralelo */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Sesiones / semana (últimas 10)</h3>
@@ -116,14 +116,20 @@ function StatsPanel({ userId }: { userId: string }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <MuscleVolumeChart userId={userId} />
+        <DurationChart sessions={sorted} />
       </div>
 
-      {/* Volumen total por sesión */}
-      <VolumeChart userId={userId} sessions={sorted} />
+      {/* Sets completadas + volumen (placeholder si no hay pesos) */}
+      <div className="grid grid-cols-2 gap-4">
+        <SetsChart userId={userId} sessions={sorted} />
+        <VolumeChart userId={userId} sessions={sorted} />
+      </div>
 
-      {/* RPE promedio por sesión */}
-      <RpeChart userId={userId} sessions={sorted} />
+      {/* RPE + músculo */}
+      <div className="grid grid-cols-2 gap-4">
+        <RpeChart userId={userId} sessions={sorted} />
+        <MuscleVolumeChart userId={userId} />
+      </div>
 
       {/* e1RM por ejercicio */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -142,6 +148,85 @@ function StatsPanel({ userId }: { userId: string }) {
           : <p className="text-gray-400 text-xs text-center py-8">Elige un ejercicio para ver su evolución</p>
         }
       </div>
+    </div>
+  )
+}
+
+// ── Duración por sesión ───────────────────────────────────────────────────────
+
+function DurationChart({ sessions }: { sessions: { id: string; started_at: string; ended_at: string | null }[] }) {
+  const data = sessions
+    .filter((s) => s.ended_at)
+    .slice(-15)
+    .map((s) => ({
+      date: fmtDate(s.started_at),
+      min: Math.round((new Date(s.ended_at!).getTime() - new Date(s.started_at).getTime()) / 60_000),
+    }))
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Duración por sesión (min)</h3>
+      {data.length === 0 ? (
+        <p className="text-gray-400 text-xs text-center py-10">Sin sesiones finalizadas</p>
+      ) : (
+        <div style={{ height: 150 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
+                formatter={(v) => [`${v} min`, 'Duración']} />
+              <Bar dataKey="min" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={30} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sets completadas por sesión ───────────────────────────────────────────────
+
+function SetsChart({ userId, sessions }: { userId: string; sessions: { id: string; started_at: string }[] }) {
+  const data = useLiveQuery(async () => {
+    const last = sessions.slice(-15)
+    const result: { date: string; completadas: number; total: number }[] = []
+    for (const s of last) {
+      const ses = await db.session_exercises.filter((se) => se.session_id === s.id && !se.deleted_at).toArray()
+      let completadas = 0, total = 0
+      for (const se of ses) {
+        const sets = await db.sets.filter((st) => st.session_exercise_id === se.id && !st.is_warmup && !st.deleted_at).toArray()
+        total += sets.length
+        completadas += sets.filter((st) => st.completed).length
+      }
+      if (total > 0) result.push({ date: fmtDate(s.started_at), completadas, total })
+    }
+    return result
+  }, [userId, sessions.length])
+
+  if (!data) return <div className="bg-gray-100 rounded-2xl animate-pulse h-40" />
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Series completadas por sesión</h3>
+      {data.length === 0 ? (
+        <p className="text-gray-400 text-xs text-center py-10">Sin datos</p>
+      ) : (
+        <div style={{ height: 150 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
+                formatter={(v, name) => [v, name === 'completadas' ? 'Completadas' : 'Total']} />
+              <Bar dataKey="total" fill="#e5e7eb" radius={[4, 4, 0, 0]} maxBarSize={30} />
+              <Bar dataKey="completadas" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }
@@ -169,24 +254,29 @@ function VolumeChart({ userId, sessions }: { userId: string; sessions: { id: str
   }, [userId, sessions.length])
 
   if (!data) return <div className="bg-gray-100 rounded-2xl animate-pulse h-40" />
-  if (data.length === 0) return null
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Volumen total por sesión (kg)</h3>
-      <div style={{ height: 160 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false}
-              tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)} />
-            <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
-              formatter={(v) => [`${Number(v).toLocaleString('es')} kg`, 'Volumen']} />
-            <Bar dataKey="vol" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Volumen por sesión (kg × reps)</h3>
+      {data.length === 0 ? (
+        <div className="py-10 text-center space-y-1">
+          <p className="text-gray-400 text-xs">Disponible cuando registres pesos en las series</p>
+        </div>
+      ) : (
+        <div style={{ height: 150 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false}
+                tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)} />
+              <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
+                formatter={(v) => [`${Number(v).toLocaleString('es')} kg`, 'Volumen']} />
+              <Bar dataKey="vol" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }
@@ -214,11 +304,13 @@ function RpeChart({ userId, sessions }: { userId: string; sessions: { id: string
     return result
   }, [userId, sessions.length])
 
-  if (!data || data.length < 2) return null
-
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <h3 className="text-sm font-semibold text-gray-700 mb-1">RPE promedio por sesión</h3>
+      {(!data || data.length < 2) ? (
+        <p className="text-gray-400 text-xs text-center py-10">Disponible cuando registres RPE en las series</p>
+      ) : (<>
+      <p className="text-xs text-gray-400 mb-4">Intensidad percibida (1–10). Estable o bajando = te estás adaptando.</p>
       <p className="text-xs text-gray-400 mb-4">Intensidad percibida (1–10). Estable o bajando = te estás adaptando.</p>
       <div style={{ height: 150 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -232,6 +324,7 @@ function RpeChart({ userId, sessions }: { userId: string; sessions: { id: string
           </LineChart>
         </ResponsiveContainer>
       </div>
+      </>)}
     </div>
   )
 }
