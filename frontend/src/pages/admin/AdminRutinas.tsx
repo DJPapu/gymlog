@@ -246,6 +246,7 @@ function DaySection({ day, onDelete, onMoveUp, onMoveDown }: {
   const [nameInput, setNameInput] = useState(day.name)
   const [showAdd, setShowAdd] = useState(false)
   const [addExId, setAddExId] = useState('')
+  const [addMode, setAddMode] = useState<'normal' | '3-7'>('normal')
   const [addSets, setAddSets] = useState(3)
   const [addRepMin, setAddRepMin] = useState(8)
   const [addRepMax, setAddRepMax] = useState(12)
@@ -271,7 +272,8 @@ function DaySection({ day, onDelete, onMoveUp, onMoveDown }: {
     const now = new Date().toISOString()
     const position = rdes?.length ?? 0
     const target_weight_kg = addWeight ? parseFloat(addWeight) : null
-    const payload = { id, routine_day_id: day.id, exercise_id: addExId, position, exercise_mode: 'normal', target_sets: addSets, rep_min: addRepMin, rep_max: addRepMax, target_weight_kg, target_rpe: null, notes: null, updated_at: now, deleted_at: null }
+    const is37 = addMode === '3-7'
+    const payload = { id, routine_day_id: day.id, exercise_id: addExId, position, exercise_mode: addMode, target_sets: is37 ? 10 : addSets, rep_min: is37 ? 3 : addRepMin, rep_max: is37 ? 7 : addRepMax, target_weight_kg, target_rpe: null, notes: null, updated_at: now, deleted_at: null }
     await db.routine_day_exercises.add(payload)
     await db.outbox.add({ table: 'routine_day_exercises', record_id: id, op: 'upsert', payload, ts: now })
     setAddExId('')
@@ -394,19 +396,36 @@ function DaySection({ day, onDelete, onMoveUp, onMoveDown }: {
               ))}
           </select>
 
-          <div className="flex items-center gap-1">
-            <input type="number" inputMode="numeric" value={addSets} onChange={(e) => setAddSets(+e.target.value)} min={1} max={10}
-              className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
-            <span className="text-gray-400 text-xs">ser</span>
+          {/* Modo Normal / 3-7 */}
+          <div className="flex rounded-lg overflow-hidden border border-gray-300 text-xs">
+            {(['normal', '3-7'] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setAddMode(m)}
+                className={`px-2.5 py-1.5 font-medium transition-colors ${addMode === m ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                {m === 'normal' ? 'Normal' : '3-7'}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-1">
-            <input type="number" inputMode="numeric" value={addRepMin} onChange={(e) => setAddRepMin(+e.target.value)} min={1}
-              className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
-            <span className="text-gray-400 text-xs">–</span>
-            <input type="number" inputMode="numeric" value={addRepMax} onChange={(e) => setAddRepMax(+e.target.value)} min={1}
-              className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
-            <span className="text-gray-400 text-xs">rep</span>
-          </div>
+
+          {addMode === 'normal' ? (
+            <>
+              <div className="flex items-center gap-1">
+                <input type="number" inputMode="numeric" value={addSets} onChange={(e) => setAddSets(+e.target.value)} min={1} max={10}
+                  className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                <span className="text-gray-400 text-xs">ser</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <input type="number" inputMode="numeric" value={addRepMin} onChange={(e) => setAddRepMin(+e.target.value)} min={1}
+                  className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                <span className="text-gray-400 text-xs">–</span>
+                <input type="number" inputMode="numeric" value={addRepMax} onChange={(e) => setAddRepMax(+e.target.value)} min={1}
+                  className="w-12 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
+                <span className="text-gray-400 text-xs">rep</span>
+              </div>
+            </>
+          ) : (
+            <span className="text-xs text-indigo-600 font-medium">2 rondas · 3→7 reps</span>
+          )}
+
           <div className="flex items-center gap-1">
             <input type="number" inputMode="decimal" value={addWeight} onChange={(e) => setAddWeight(e.target.value)} min={0} step={0.5} placeholder="—"
               className="w-16 bg-white border border-gray-300 rounded px-1.5 py-1.5 text-gray-900 text-xs text-center focus:outline-none focus:border-indigo-500" />
@@ -446,6 +465,7 @@ function ExerciseRow({
   onMoveDown?: () => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [editMode, setEditMode] = useState<'normal' | '3-7'>((rde.exercise_mode as 'normal' | '3-7') ?? 'normal')
   const [editSets, setEditSets] = useState(rde.target_sets)
   const [editRepMin, setEditRepMin] = useState(rde.rep_min)
   const [editRepMax, setEditRepMax] = useState(rde.rep_max)
@@ -454,8 +474,17 @@ function ExerciseRow({
   async function save() {
     const now = new Date().toISOString()
     const target_weight_kg = editWeight ? parseFloat(editWeight) : null
-    const updated = { ...rde, target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now }
-    await db.routine_day_exercises.update(rde.id, { target_sets: editSets, rep_min: editRepMin, rep_max: editRepMax, target_weight_kg, updated_at: now })
+    const is37 = editMode === '3-7'
+    const fields = {
+      exercise_mode: editMode,
+      target_sets: is37 ? 10 : editSets,
+      rep_min: is37 ? 3 : editRepMin,
+      rep_max: is37 ? 7 : editRepMax,
+      target_weight_kg,
+      updated_at: now,
+    }
+    const updated = { ...rde, ...fields }
+    await db.routine_day_exercises.update(rde.id, fields)
     await db.outbox.add({ table: 'routine_day_exercises', record_id: rde.id, op: 'upsert', payload: updated, ts: now })
     setEditing(false)
   }
@@ -463,18 +492,36 @@ function ExerciseRow({
   if (editing) {
     return (
       <tr className="border-b border-gray-100 bg-indigo-50">
-        <td className="py-1.5 pr-4 text-gray-900 text-sm">{ex.name}</td>
-        <td className="px-2 py-1.5 text-center">
-          <input type="number" value={editSets} onChange={(e) => setEditSets(+e.target.value)} min={1} max={10}
-            className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
+        <td className="py-1.5 pr-4 text-gray-900 text-sm">
+          <div className="flex flex-col gap-1">
+            <span>{ex.name}</span>
+            <div className="flex rounded overflow-hidden border border-indigo-300 w-fit text-xs">
+              {(['normal', '3-7'] as const).map((m) => (
+                <button key={m} type="button" onClick={() => setEditMode(m)}
+                  className={`px-2 py-0.5 font-medium transition-colors ${editMode === m ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                  {m === 'normal' ? 'Normal' : '3-7'}
+                </button>
+              ))}
+            </div>
+          </div>
         </td>
         <td className="px-2 py-1.5 text-center">
-          <input type="number" value={editRepMin} onChange={(e) => setEditRepMin(+e.target.value)} min={1}
-            className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
+          {editMode === 'normal'
+            ? <input type="number" value={editSets} onChange={(e) => setEditSets(+e.target.value)} min={1} max={10}
+                className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
+            : <span className="text-indigo-500 text-xs font-medium">10</span>}
         </td>
         <td className="px-2 py-1.5 text-center">
-          <input type="number" value={editRepMax} onChange={(e) => setEditRepMax(+e.target.value)} min={1}
-            className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
+          {editMode === 'normal'
+            ? <input type="number" value={editRepMin} onChange={(e) => setEditRepMin(+e.target.value)} min={1}
+                className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
+            : <span className="text-indigo-500 text-xs">3</span>}
+        </td>
+        <td className="px-2 py-1.5 text-center">
+          {editMode === 'normal'
+            ? <input type="number" value={editRepMax} onChange={(e) => setEditRepMax(+e.target.value)} min={1}
+                className="w-12 bg-white border border-indigo-500 rounded px-1 py-0.5 text-gray-900 text-xs text-center focus:outline-none" />
+            : <span className="text-indigo-500 text-xs">7</span>}
         </td>
         <td className="px-2 py-1.5 text-center">
           <input type="number" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} min={0} step={0.5} placeholder="—"
@@ -495,7 +542,12 @@ function ExerciseRow({
       className="border-b border-gray-100 hover:bg-slate-50 cursor-pointer group"
       onClick={() => setEditing(true)}
     >
-      <td className="py-2 pr-4 text-gray-900 text-sm">{ex.name}</td>
+      <td className="py-2 pr-4 text-gray-900 text-sm">
+        <span>{ex.name}</span>
+        {rde.exercise_mode === '3-7' && (
+          <span className="ml-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">3-7</span>
+        )}
+      </td>
       <td className="px-2 py-2 text-center text-gray-700 text-sm">{rde.target_sets}</td>
       <td className="px-2 py-2 text-center text-gray-700 text-sm">{rde.rep_min}</td>
       <td className="px-2 py-2 text-center text-gray-700 text-sm">{rde.rep_max}</td>
