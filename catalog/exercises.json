@@ -500,5 +500,19 @@
     "default_rep_range": "12-20",
     "setup_tips": "Polea alta con accesorio de cuerda. De pie o sentado en el suelo. Tirar hacia la cara separando las manos al final con los codos a la altura de los hombros o por encima.",
     "photo_ref": "photos/processed/jalon_cara_cuerda_polea.jpg"
+  },
+  {
+    "id": "a7c3e1b2-d4f6-8a09-bc12-3e5f7a9b1c2d",
+    "name": "Pectorales mariposa en casa",
+    "machine_name": "Chest fly doméstico (aparato de resorte)",
+    "equipment": "machine",
+    "primary_muscle": "pectoral",
+    "secondary_muscles": ["deltoides anterior", "tríceps"],
+    "movement_pattern": "isolation",
+    "unilateral": false,
+    "weight_increment_kg": 0,
+    "default_rep_range": "10-15",
+    "setup_tips": "Sentado o de pie, agarra los mangos con los brazos extendidos hacia los lados. Cierra los brazos hacia el centro del pecho manteniendo una ligera flexión en los codos, luego vuelve lentamente a la posición inicial controlando la resistencia.",
+    "photo_ref": "photos/processed/pectorales_mariposa_en_casa.jpeg"
   }
 ]
