@@ -8,6 +8,7 @@ import {
 import { DeleteButton } from '../components/DeleteButton'
 import { db, type Session, type SessionExercise, type SetRecord } from '../db/schema'
 import { useAuth } from '../lib/auth'
+import { estimateCalories } from '../lib/calories'
 
 export default function Progreso() {
   const { user } = useAuth()
@@ -128,6 +129,21 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
     ? Math.round((new Date(session.ended_at).getTime() - startDate.getTime()) / 60_000)
     : null
 
+  const calories = useLiveQuery(async () => {
+    if (!durationMin) return null
+    const bm = await db.body_metrics.orderBy('measured_at').reverse().first()
+    if (!bm?.weight_kg) return null
+    const ses = await db.session_exercises
+      .filter((se) => se.session_id === session.id && !se.deleted_at)
+      .toArray()
+    const patterns: string[] = []
+    for (const se of ses) {
+      const ex = await db.exercises.get(se.exercise_id)
+      if (ex?.movement_pattern) patterns.push(ex.movement_pattern)
+    }
+    return estimateCalories(durationMin, patterns, bm.weight_kg)
+  }, [session.id, durationMin])
+
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
       <div className="flex items-start">
@@ -147,6 +163,9 @@ function SessionCard({ session, dayName }: { session: Session; dayName?: string 
             <div className="shrink-0 text-right">
               {durationMin != null && (
                 <p className="text-gray-400 text-xs">{durationMin} min</p>
+              )}
+              {calories != null && (
+                <p className="text-orange-400 text-xs font-medium">~{calories} kcal</p>
               )}
               {sessionExercises !== undefined && (
                 <p className="text-gray-400 text-xs">{sessionExercises.length} ejercicios</p>

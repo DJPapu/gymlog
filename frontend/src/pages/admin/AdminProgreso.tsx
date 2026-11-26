@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { db } from '../../db/schema'
 import { useAuth } from '../../lib/auth'
+import { estimateCalories } from '../../lib/calories'
 import Progreso from '../Progreso'
 
 export default function AdminProgreso() {
@@ -47,6 +48,29 @@ function StatsPanel({ userId }: { userId: string }) {
   )
   const exercises = useLiveQuery(() => db.exercises.filter((e) => !e.deleted_at).toArray(), [])
   const [selectedExId, setSelectedExId] = useState<string>('')
+
+  const totalCalories30d = useLiveQuery(async () => {
+    const bm = await db.body_metrics.orderBy('measured_at').reverse().first()
+    if (!bm?.weight_kg || !sessions) return null
+    const since = Date.now() - 30 * 86_400_000
+    const recent = sessions.filter((s) => s.ended_at && new Date(s.started_at).getTime() >= since)
+    let total = 0
+    for (const s of recent) {
+      const dur = s.ended_at
+        ? Math.round((new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 60_000)
+        : null
+      if (!dur) continue
+      const ses = await db.session_exercises.filter((se) => se.session_id === s.id && !se.deleted_at).toArray()
+      const patterns: string[] = []
+      for (const se of ses) {
+        const ex = await db.exercises.get(se.exercise_id)
+        if (ex?.movement_pattern) patterns.push(ex.movement_pattern)
+      }
+      const kcal = estimateCalories(dur, patterns, bm.weight_kg)
+      if (kcal) total += kcal
+    }
+    return total > 0 ? total : null
+  }, [userId, sessions?.length])
 
   if (!sessions || !exercises) {
     return <div className="bg-gray-100 rounded-2xl p-8 animate-pulse h-32" />
@@ -93,10 +117,11 @@ function StatsPanel({ userId }: { userId: string }) {
   return (
     <div className="space-y-6">
       {/* Cards resumen */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <StatCard label="Sesiones totales" value={String(sessions.length)} />
         <StatCard label="Últimos 30 días" value={String(sessionsLast30)} />
         <StatCard label="Duración media" value={avgDuration != null ? `${avgDuration} min` : '—'} />
+        <StatCard label="Kcal (30 días)" value={totalCalories30d != null ? `~${totalCalories30d.toLocaleString('es')}` : '—'} />
       </div>
 
       {/* Frecuencia + duración en paralelo */}
@@ -119,11 +144,14 @@ function StatsPanel({ userId }: { userId: string }) {
         <DurationChart sessions={sorted} />
       </div>
 
-      {/* Sets completadas + volumen (placeholder si no hay pesos) */}
+      {/* Sets completadas + calorías */}
       <div className="grid grid-cols-2 gap-4">
         <SetsChart userId={userId} sessions={sorted} />
-        <VolumeChart userId={userId} sessions={sorted} />
+        <CaloriesChart userId={userId} sessions={sorted} />
       </div>
+
+      {/* Volumen (placeholder si no hay pesos) */}
+      <VolumeChart userId={userId} sessions={sorted} />
 
       {/* RPE + músculo */}
       <div className="grid grid-cols-2 gap-4">
@@ -223,6 +251,57 @@ function SetsChart({ userId, sessions }: { userId: string; sessions: { id: strin
                 formatter={(v, name) => [v, name === 'completadas' ? 'Completadas' : 'Total']} />
               <Bar dataKey="total" fill="#e5e7eb" radius={[4, 4, 0, 0]} maxBarSize={30} />
               <Bar dataKey="completadas" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Calorías estimadas por sesión ─────────────────────────────────────────────
+
+function CaloriesChart({ userId, sessions }: { userId: string; sessions: { id: string; started_at: string; ended_at: string | null }[] }) {
+  const data = useLiveQuery(async () => {
+    const bm = await db.body_metrics.orderBy('measured_at').reverse().first()
+    if (!bm?.weight_kg) return null
+    const last = sessions.filter((s) => s.ended_at).slice(-15)
+    const result: { date: string; kcal: number }[] = []
+    for (const s of last) {
+      const dur = Math.round((new Date(s.ended_at!).getTime() - new Date(s.started_at).getTime()) / 60_000)
+      const ses = await db.session_exercises.filter((se) => se.session_id === s.id && !se.deleted_at).toArray()
+      const patterns: string[] = []
+      for (const se of ses) {
+        const ex = await db.exercises.get(se.exercise_id)
+        if (ex?.movement_pattern) patterns.push(ex.movement_pattern)
+      }
+      const kcal = estimateCalories(dur, patterns, bm.weight_kg)
+      if (kcal) result.push({ date: fmtDate(s.started_at), kcal })
+    }
+    return result
+  }, [userId, sessions.length])
+
+  if (data === undefined) return <div className="bg-gray-100 rounded-2xl animate-pulse h-40" />
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Calorías estimadas por sesión</h3>
+      {!data ? (
+        <p className="text-gray-400 text-xs text-center py-10">
+          Añade tu peso en Perfil para ver calorías
+        </p>
+      ) : data.length === 0 ? (
+        <p className="text-gray-400 text-xs text-center py-10">Sin sesiones finalizadas</p>
+      ) : (
+        <div style={{ height: 150 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
+                formatter={(v) => [`~${v} kcal`, 'Calorías']} />
+              <Bar dataKey="kcal" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={30} />
             </BarChart>
           </ResponsiveContainer>
         </div>
