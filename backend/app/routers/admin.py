@@ -303,6 +303,42 @@ def ai_summary(
     return {"summary": response.text}
 
 
+@router.post("/import-catalog")
+def import_catalog(
+    user_id: CurrentUser = "",
+    db: DB = None,
+) -> dict[str, Any]:
+    """Read catalog/exercises.json and upsert all exercises into the DB."""
+    import json
+    from pathlib import Path
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    catalog_path = Path(__file__).parents[4] / "catalog" / "exercises.json"
+    if not catalog_path.exists():
+        raise HTTPException(status_code=404, detail=f"No se encuentra {catalog_path}")
+
+    exercises = json.loads(catalog_path.read_text(encoding="utf-8"))
+    now = datetime.now(timezone.utc)
+
+    for ex in exercises:
+        values = {**ex, "updated_at": now}
+        # Remove keys not in the model
+        values.pop("exercise_type", None)
+        values.pop("met_value", None)
+        stmt = (
+            pg_insert(Exercise)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=["id"],
+                set_={k: v for k, v in values.items() if k != "id"},
+            )
+        )
+        db.execute(stmt)
+    db.commit()
+    return {"imported": len(exercises)}
+
+
 @router.post("/adjust-target-weights")
 def adjust_target_weights(
     user_id: CurrentUser = "",

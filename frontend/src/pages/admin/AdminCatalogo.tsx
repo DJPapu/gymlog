@@ -1,6 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db, type Exercise } from '../../db/schema'
+import { apiFetch } from '../../lib/api'
+import { syncPull } from '../../sync/engine'
 
 const MUSCLES = [
   'pectoral','dorsal','trapecio','romboides','deltoides anterior','deltoides lateral',
@@ -15,12 +17,29 @@ export default function AdminCatalogo() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [pushing, setPushing] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
 
   const filtered = exercises?.filter(
     (ex) =>
       ex.name.toLowerCase().includes(search.toLowerCase()) ||
       (ex.primary_muscle ?? '').toLowerCase().includes(search.toLowerCase())
   )
+
+  async function importFromServer() {
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const res = await apiFetch<{ imported: number }>('/admin/import-catalog', { method: 'POST' })
+      localStorage.removeItem('gymlog_last_pulled_at')
+      await syncPull()
+      setImportMsg(`✓ ${res.imported} ejercicios importados y sincronizados`)
+    } catch (err) {
+      setImportMsg(`Error: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   async function pushAllExercises() {
     if (!exercises || exercises.length === 0) return
@@ -50,6 +69,14 @@ export default function AdminCatalogo() {
           <h2 className="text-gray-900 font-bold text-lg">Catálogo de ejercicios</h2>
           <span className="text-gray-400 text-sm">{exercises?.length ?? 0} ejercicios</span>
           <button
+            onClick={importFromServer}
+            disabled={importing}
+            title="Lee exercises.json del servidor y lo sincroniza aquí"
+            className="text-xs text-emerald-600 hover:text-emerald-500 disabled:opacity-40 border border-emerald-200 rounded px-2 py-0.5 font-medium"
+          >
+            {importing ? 'Importando…' : '⬇ Importar desde exercises.json'}
+          </button>
+          <button
             onClick={pushAllExercises}
             disabled={pushing}
             title="Envía todos los ejercicios del catálogo local al servidor"
@@ -57,6 +84,11 @@ export default function AdminCatalogo() {
           >
             {pushing ? 'Añadiendo…' : '⬆ Push catálogo al servidor'}
           </button>
+          {importMsg && (
+            <span className={`text-xs ${importMsg.startsWith('✓') ? 'text-emerald-600' : 'text-red-500'}`}>
+              {importMsg}
+            </span>
+          )}
         </div>
         <input
           type="search"
