@@ -22,6 +22,21 @@ export default function AdminRutinas() {
     setSelectedId(id)
   }
 
+  async function toggleActive(id: string, currentlyActive: boolean) {
+    const now = new Date().toISOString()
+    if (!currentlyActive) {
+      // Deactivate all others first
+      const all = await db.routines.filter((r) => r.user_id === (user?.id ?? '') && !r.deleted_at && r.is_active).toArray()
+      for (const r of all) {
+        await db.routines.update(r.id, { is_active: false, updated_at: now })
+        await db.outbox.add({ table: 'routines', record_id: r.id, op: 'upsert', payload: { ...r, is_active: false, updated_at: now }, ts: now })
+      }
+    }
+    await db.routines.update(id, { is_active: !currentlyActive, updated_at: now })
+    const r = await db.routines.get(id)
+    if (r) await db.outbox.add({ table: 'routines', record_id: id, op: 'upsert', payload: { ...r, is_active: !currentlyActive, updated_at: now }, ts: now })
+  }
+
   async function deleteRoutine(id: string) {
     const now = new Date().toISOString()
     if (selectedId === id) setSelectedId(null)
@@ -49,6 +64,7 @@ export default function AdminRutinas() {
         onSelect={setSelectedId}
         onCreate={createRoutine}
         onDelete={deleteRoutine}
+        onToggleActive={toggleActive}
       />
 
       <div className="flex-1 overflow-auto min-w-0">
@@ -72,12 +88,14 @@ function RoutineSidebar({
   onSelect,
   onCreate,
   onDelete,
+  onToggleActive,
 }: {
   routines: Routine[]
   selectedId: string | null
   onSelect: (id: string) => void
   onCreate: (name: string) => void
   onDelete: (id: string) => void
+  onToggleActive: (id: string, currentlyActive: boolean) => void
 }) {
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
@@ -120,15 +138,31 @@ function RoutineSidebar({
         {routines.map((r) => (
           <div
             key={r.id}
-            className={`flex items-center gap-1 rounded-lg px-2.5 py-2 cursor-pointer group transition-colors ${
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 cursor-pointer group transition-colors ${
               selectedId === r.id ? 'bg-indigo-600' : 'hover:bg-gray-100'
             }`}
             onClick={() => onSelect(r.id)}
           >
+            {/* Active indicator */}
+            <span
+              title={r.is_active ? 'Rutina activa (Hoy la usa)' : 'Inactiva'}
+              className={`shrink-0 w-2 h-2 rounded-full ${r.is_active ? 'bg-emerald-400' : 'bg-gray-300'}`}
+            />
             <span className={`flex-1 text-sm truncate ${selectedId === r.id ? 'text-white font-medium' : 'text-gray-700'}`}>
               {r.name}
             </span>
-            <span className="opacity-0 group-hover:opacity-100 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <span className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => onToggleActive(r.id, r.is_active)}
+                title={r.is_active ? 'Desactivar' : 'Activar'}
+                className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${
+                  r.is_active
+                    ? 'text-gray-400 hover:text-amber-600'
+                    : 'text-emerald-600 hover:text-emerald-500'
+                }`}
+              >
+                {r.is_active ? '◉' : '○'}
+              </button>
               <DeleteButton onConfirm={() => onDelete(r.id)} size="sm" />
             </span>
           </div>
