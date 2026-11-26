@@ -51,12 +51,19 @@ export default function Hoy() {
   )
 
   // Determinar el siguiente día de la rutina
-  const nextDay: RoutineDay | undefined = (() => {
+  const autoNextDay: RoutineDay | undefined = (() => {
     if (!days || days.length === 0) return undefined
     if (!lastSession?.routine_day_id) return days[0]
     const lastIdx = days.findIndex((d) => d.id === lastSession.routine_day_id)
     return days[(lastIdx + 1) % days.length]
   })()
+
+  const [overrideDayId, setOverrideDayId] = useState<string | null>(null)
+  const [pickingDay, setPickingDay] = useState(false)
+
+  const nextDay = overrideDayId
+    ? days?.find((d) => d.id === overrideDayId) ?? autoNextDay
+    : autoNextDay
 
   const [starting, setStarting] = useState(false)
 
@@ -65,6 +72,7 @@ export default function Hoy() {
     setStarting(true)
     try {
       const sessionId = await startSession(nextDay.id, user.id)
+      setOverrideDayId(null)
       navigate(`/sesion/${sessionId}`)
     } finally {
       setStarting(false)
@@ -157,18 +165,56 @@ export default function Hoy() {
               <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide">
                 {activeRoutine.name}
               </p>
-              <h3 className="text-xl font-bold text-gray-900 mt-1">{nextDay?.name}</h3>
+              <div className="flex items-baseline gap-2 mt-1">
+                <h3 className="text-xl font-bold text-gray-900">{nextDay?.name}</h3>
+                {overrideDayId && (
+                  <span className="text-xs text-amber-500 font-medium">modificado</span>
+                )}
+              </div>
+
+              {/* Day picker */}
+              {pickingDay ? (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs text-gray-400 mb-2">Elige el día a entrenar:</p>
+                  {days?.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setOverrideDayId(d.id); setPickingDay(false) }}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                        (overrideDayId ?? autoNextDay?.id) === d.id
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {d.name}
+                    </button>
+                  ))}
+                  <button onClick={() => setPickingDay(false)}
+                    className="w-full text-center text-gray-400 text-xs py-1 mt-1">
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setPickingDay(true)}
+                  className="text-xs text-gray-400 hover:text-indigo-500 mt-1 transition-colors"
+                >
+                  Cambiar día
+                </button>
+              )}
             </div>
 
-            <DayExerciseList dayId={nextDay?.id} />
+            {!pickingDay && <DayExerciseList dayId={nextDay?.id} />}
 
-            <button
-              onClick={handleStart}
-              disabled={starting}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-colors text-lg min-h-[56px]"
-            >
-              {starting ? 'Iniciando...' : '▶ Empezar sesión'}
-            </button>
+            {!pickingDay && (
+              <button
+                onClick={handleStart}
+                disabled={starting}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-colors text-lg min-h-[56px]"
+              >
+                {starting ? 'Iniciando...' : '▶ Empezar sesión'}
+              </button>
+            )}
           </div>
         </>
       )}
