@@ -6,6 +6,7 @@ import SyncBadge from './components/SyncBadge'
 import AdminApp from './pages/admin/AdminApp'
 import Ejercicios from './pages/Ejercicios'
 import Hoy from './pages/Hoy'
+import Nutricion from './pages/Nutricion'
 import Perfil from './pages/Perfil'
 import Progreso from './pages/Progreso'
 import Rutinas from './pages/Rutinas'
@@ -31,6 +32,7 @@ function MobileShell() {
           <Route path="/rutinas" element={<Rutinas />} />
           <Route path="/ejercicios" element={<Ejercicios />} />
           <Route path="/progreso" element={<Progreso />} />
+          <Route path="/nutricion" element={<Nutricion />} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

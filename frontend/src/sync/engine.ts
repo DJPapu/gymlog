@@ -18,6 +18,7 @@ interface PullResponse {
   sets: Record<string, unknown>[]
   profiles: Record<string, unknown>[]
   body_metrics: Record<string, unknown>[]
+  food_logs: Record<string, unknown>[]
   pulled_at: string
 }
 
@@ -65,6 +66,7 @@ export async function syncPull(): Promise<void> {
     db.sets,
     db.profiles,
     db.body_metrics,
+    db.food_logs,
   ], async () => {
     // LWW en el pull: solo sobreescribir si el servidor tiene un updated_at más reciente
     // que el registro local. Evita que un pull ciegamente revierta cambios locales que
@@ -113,6 +115,11 @@ export async function syncPull(): Promise<void> {
       const rec = r as { id: string; updated_at: string }
       const local = await db.body_metrics.get(rec.id)
       if (!local || rec.updated_at > local.updated_at) await db.body_metrics.put(r as never)
+    }
+    for (const r of (data.food_logs ?? [])) {
+      const rec = r as { id: string; updated_at: string }
+      const local = await db.food_logs.get(rec.id)
+      if (!local || rec.updated_at > local.updated_at) await db.food_logs.put(r as never)
     }
   })
 

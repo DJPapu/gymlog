@@ -1,0 +1,383 @@
+import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
+import { db, type FoodLog } from '../db/schema'
+import { apiFetch } from '../lib/api'
+import { computeTargets } from '../lib/tdee'
+
+type Meal = FoodLog['meal']
+
+const MEALS: { key: Meal; label: string }[] = [
+  { key: 'desayuno', label: 'Desayuno' },
+  { key: 'almuerzo', label: 'Almuerzo' },
+  { key: 'cena', label: 'Cena' },
+  { key: 'snack', label: 'Snack' },
+]
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function addDays(iso: string, n: number) {
+  const d = new Date(iso)
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+function formatDate(iso: string) {
+  const today = todayISO()
+  if (iso === today) return 'Hoy'
+  if (iso === addDays(today, -1)) return 'Ayer'
+  return new Date(iso + 'T12:00:00').toLocaleDateString('es-ES', {
+    weekday: 'short', day: 'numeric', month: 'short',
+  })
+}
+
+// ── Macro progress bar ────────────────────────────────────────────────────────
+
+function MacroBar({
+  label, value, target, unit, color,
+}: {
+  label: string; value: number; target: number; unit: string; color: string
+}) {
+  const pct = target > 0 ? Math.min((value / target) * 100, 100) : 0
+  const over = target > 0 && value > target
+  return (
+    <div className="flex-1 min-w-0">
+      <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <span>{label}</span>
+        <span className={over ? 'text-red-500 font-semibold' : ''}>
+          {Math.round(value)}<span className="text-gray-400">/{target}{unit}</span>
+        </span>
+      </div>
+      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${over ? 'bg-red-400' : color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ── Add food form ──────────────────────────────────────────────────────────────
+
+function AddFoodForm({
+  date, defaultMeal, onDone,
+}: {
+  date: string; defaultMeal: Meal; onDone: () => void
+}) {
+  const [meal, setMeal] = useState<Meal>(defaultMeal)
+  const [desc, setDesc] = useState('')
+  const [weightG, setWeightG] = useState('')
+  const [cals, setCals] = useState('')
+  const [proteinG, setProteinG] = useState('')
+  const [carbsG, setCarbsG] = useState('')
+  const [fatG, setFatG] = useState('')
+  const [estimating, setEstimating] = useState(false)
+  const [estimateErr, setEstimateErr] = useState<string | null>(null)
+
+  async function estimate() {
+    if (!desc.trim()) return
+    setEstimating(true)
+    setEstimateErr(null)
+    try {
+      const res = await apiFetch<{
+        calories: number; protein_g: number | null; carbs_g: number | null; fat_g: number | null
+      }>('/nutrition/estimate', {
+        method: 'POST',
+        body: JSON.stringify({
+          description: desc.trim(),
+          weight_g: weightG ? parseFloat(weightG) : null,
+        }),
+      })
+      setCals(String(res.calories))
+      if (res.protein_g != null) setProteinG(String(res.protein_g))
+      if (res.carbs_g != null) setCarbsG(String(res.carbs_g))
+      if (res.fat_g != null) setFatG(String(res.fat_g))
+    } catch (e) {
+      setEstimateErr(e instanceof Error ? e.message : 'Error al estimar')
+    } finally {
+      setEstimating(false)
+    }
+  }
+
+  async function save() {
+    const calories = parseFloat(cals)
+    if (!desc.trim() || isNaN(calories)) return
+    const now = new Date().toISOString()
+    const entry: FoodLog = {
+      id: crypto.randomUUID(),
+      user_id: '',
+      logged_at: date,
+      meal,
+      description: desc.trim(),
+      weight_g: weightG ? parseFloat(weightG) : null,
+      calories_kcal: calories,
+      protein_g: proteinG ? parseFloat(proteinG) : null,
+      carbs_g: carbsG ? parseFloat(carbsG) : null,
+      fat_g: fatG ? parseFloat(fatG) : null,
+      source: estimating ? 'manual' : (cals && !estimating ? 'gemini' : 'manual'),
+      notes: null,
+      updated_at: now,
+      deleted_at: null,
+    }
+    await db.food_logs.put(entry)
+    await db.outbox.add({ table: 'food_logs', record_id: entry.id, op: 'upsert', payload: entry, ts: now })
+    onDone()
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+      {/* Meal tabs */}
+      <div className="flex gap-1">
+        {MEALS.map((m) => (
+          <button
+            key={m.key}
+            onClick={() => setMeal(m.key)}
+            className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors ${
+              meal === m.key
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Description + weight */}
+      <div className="flex gap-2">
+        <input
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          placeholder="Descripción (p.ej. 2 huevos revueltos con pan)"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-indigo-400"
+        />
+        <input
+          value={weightG}
+          onChange={(e) => setWeightG(e.target.value)}
+          placeholder="g"
+          inputMode="decimal"
+          className="w-16 bg-gray-50 border border-gray-200 rounded-xl px-2 py-2 text-sm text-gray-800 text-center focus:outline-none focus:border-indigo-400"
+        />
+      </div>
+
+      {/* Gemini estimate button */}
+      <button
+        onClick={estimate}
+        disabled={estimating || !desc.trim()}
+        className="w-full text-sm py-2 rounded-xl bg-violet-50 text-violet-700 font-medium disabled:opacity-40 hover:bg-violet-100 transition-colors"
+      >
+        {estimating ? 'Estimando…' : '✨ Estimar con IA'}
+      </button>
+      {estimateErr && <p className="text-xs text-red-500">{estimateErr}</p>}
+
+      {/* Macros */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: 'kcal', val: cals, set: setCals, color: 'text-orange-600' },
+          { label: 'prot g', val: proteinG, set: setProteinG, color: 'text-blue-600' },
+          { label: 'carbs g', val: carbsG, set: setCarbsG, color: 'text-amber-600' },
+          { label: 'grasa g', val: fatG, set: setFatG, color: 'text-pink-600' },
+        ].map(({ label, val, set, color }) => (
+          <div key={label} className="flex flex-col items-center gap-1">
+            <label className={`text-xs font-medium ${color}`}>{label}</label>
+            <input
+              value={val}
+              onChange={(e) => set(e.target.value)}
+              inputMode="decimal"
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-1 py-1.5 text-sm text-gray-800 text-center focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={onDone}
+          className="flex-1 py-2 text-sm text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={save}
+          disabled={!desc.trim() || !cals}
+          className="flex-1 py-2 text-sm text-white bg-indigo-600 rounded-xl font-medium disabled:opacity-40 hover:bg-indigo-500 transition-colors"
+        >
+          Guardar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Food log item ──────────────────────────────────────────────────────────────
+
+function FoodItem({ log }: { log: FoodLog }) {
+  async function remove() {
+    const now = new Date().toISOString()
+    await db.food_logs.update(log.id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({
+      table: 'food_logs', record_id: log.id, op: 'upsert',
+      payload: { ...log, deleted_at: now, updated_at: now }, ts: now,
+    })
+  }
+
+  return (
+    <div className="flex items-center justify-between py-2 group">
+      <div className="flex-1 min-w-0 mr-2">
+        <p className="text-sm text-gray-800 truncate">{log.description}</p>
+        <p className="text-xs text-gray-400">
+          {Math.round(log.calories_kcal)} kcal
+          {log.protein_g != null && ` · ${log.protein_g}g prot`}
+          {log.weight_g != null && ` · ${log.weight_g}g`}
+        </p>
+      </div>
+      <button
+        onClick={remove}
+        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs px-2 py-1 transition-opacity"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function Nutricion() {
+  const [date, setDate] = useState(todayISO())
+  const [addingMeal, setAddingMeal] = useState<Meal | null>(null)
+
+  const profile = useLiveQuery(() => db.profiles.toCollection().first(), [])
+  const latestMetric = useLiveQuery(
+    () => db.body_metrics.orderBy('measured_at').filter((m) => !m.deleted_at && m.weight_kg != null).last(),
+    []
+  )
+  const logs = useLiveQuery(
+    () => db.food_logs.where('logged_at').equals(date).filter((l) => !l.deleted_at).toArray(),
+    [date]
+  )
+
+  const targets = profile && latestMetric != null
+    ? computeTargets(profile, latestMetric)
+    : null
+
+  const totals = (logs ?? []).reduce(
+    (acc, l) => ({
+      calories: acc.calories + l.calories_kcal,
+      protein_g: acc.protein_g + (l.protein_g ?? 0),
+      carbs_g: acc.carbs_g + (l.carbs_g ?? 0),
+      fat_g: acc.fat_g + (l.fat_g ?? 0),
+    }),
+    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
+  )
+
+  const isToday = date === todayISO()
+  const canGoForward = date < todayISO()
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="px-4 pt-4 pb-2 flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => setDate(addDays(date, -1))}
+            className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+          >
+            ‹
+          </button>
+          <span className="text-base font-semibold text-gray-800">{formatDate(date)}</span>
+          <button
+            onClick={() => canGoForward && setDate(addDays(date, 1))}
+            disabled={!canGoForward}
+            className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 disabled:opacity-30"
+          >
+            ›
+          </button>
+        </div>
+
+        {/* Summary card */}
+        {targets ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3">
+            {/* Calories headline */}
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-2xl font-bold text-gray-900">{Math.round(totals.calories)}</span>
+              <span className="text-sm text-gray-400">/ {targets.calories} kcal</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  totals.calories > targets.calories ? 'bg-red-400' : 'bg-orange-400'
+                }`}
+                style={{ width: `${Math.min((totals.calories / targets.calories) * 100, 100)}%` }}
+              />
+            </div>
+
+            {/* Macros */}
+            <div className="flex gap-3">
+              <MacroBar label="Proteína" value={totals.protein_g} target={targets.protein_g} unit="g" color="bg-blue-400" />
+              <MacroBar label="Carbos" value={totals.carbs_g} target={targets.carbs_g} unit="g" color="bg-amber-400" />
+              <MacroBar label="Grasa" value={totals.fat_g} target={targets.fat_g} unit="g" color="bg-pink-400" />
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-2xl p-3 text-center text-sm text-gray-400">
+            {!profile?.height_cm || !profile?.birth_date || !profile?.sex || !profile?.goal
+              ? 'Completa tu perfil (peso, altura, fecha de nacimiento, sexo y objetivo) para ver los objetivos nutricionales.'
+              : !latestMetric?.weight_kg
+                ? 'Registra tu peso en Perfil para ver los objetivos nutricionales.'
+                : 'Calculando objetivos…'}
+          </div>
+        )}
+      </div>
+
+      {/* Meal sections */}
+      <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
+        {addingMeal === null && (
+          <button
+            onClick={() => setAddingMeal('desayuno')}
+            className="w-full mt-2 py-3 rounded-2xl border-2 border-dashed border-gray-200 text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+          >
+            + Añadir alimento
+          </button>
+        )}
+
+        {addingMeal !== null && (
+          <AddFoodForm
+            date={date}
+            defaultMeal={addingMeal}
+            onDone={() => setAddingMeal(null)}
+          />
+        )}
+
+        {MEALS.map(({ key, label }) => {
+          const items = (logs ?? []).filter((l) => l.meal === key)
+          if (items.length === 0) return null
+          const mealCals = items.reduce((s, l) => s + l.calories_kcal, 0)
+          return (
+            <div key={key} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div
+                className="flex items-center justify-between px-4 py-2 border-b border-gray-50 cursor-pointer"
+                onClick={() => setAddingMeal(key)}
+              >
+                <span className="text-sm font-semibold text-gray-700">{label}</span>
+                <span className="text-xs text-gray-400">{Math.round(mealCals)} kcal · + añadir</span>
+              </div>
+              <div className="px-4 divide-y divide-gray-50">
+                {items.map((log) => <FoodItem key={log.id} log={log} />)}
+              </div>
+            </div>
+          )
+        })}
+
+        {isToday && (logs ?? []).length === 0 && addingMeal === null && (
+          <p className="text-center text-sm text-gray-400 py-8">
+            Sin registros para hoy.<br />Pulsa «+ Añadir alimento» para empezar.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -29,4 +29,5 @@ class SyncPullResponse(BaseModel):
     sets: list[dict[str, Any]] = []
     profiles: list[dict[str, Any]] = []
     body_metrics: list[dict[str, Any]] = []
+    food_logs: list[dict[str, Any]] = []
     pulled_at: str

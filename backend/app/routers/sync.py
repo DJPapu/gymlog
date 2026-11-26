@@ -10,6 +10,7 @@ from app.db import get_db
 from app.models import (
     BodyMetric,
     Exercise,
+    FoodLog,
     Profile,
     Routine,
     RoutineDay,
@@ -32,10 +33,11 @@ _TABLE_MAP = {
     "sets": Set,
     "profiles": Profile,
     "body_metrics": BodyMetric,
+    "food_logs": FoodLog,
 }
 
 # Tablas cuyo user_id debe forzarse desde el JWT
-_USER_ID_TABLES = {"routines", "sessions", "body_metrics", "profiles"}
+_USER_ID_TABLES = {"routines", "sessions", "body_metrics", "profiles", "food_logs"}
 
 # Orden topológico para satisfacer FKs: padres antes que hijos.
 # Sin relationship() en los modelos SQLAlchemy no puede deducirlo solo.
@@ -46,6 +48,7 @@ _TABLE_ORDER = {
     "routine_days": 2,
     "sessions": 2,
     "body_metrics": 2,
+    "food_logs": 2,
     "routine_day_exercises": 3,
     "session_exercises": 3,
     "sets": 4,
@@ -118,9 +121,10 @@ def sync_push(
             for field in ("updated_at", "deleted_at", "started_at", "ended_at", "measured_at"):
                 if field in payload:
                     payload[field] = _parse_dt(payload[field])
-            # birth_date es date (no datetime)
-            if "birth_date" in payload:
-                payload["birth_date"] = _parse_date(payload["birth_date"])
+            # Campos date (no datetime)
+            for field in ("birth_date", "logged_at"):
+                if field in payload:
+                    payload[field] = _parse_date(payload[field])
 
             # Savepoint por cambio: un error no contamina el resto de la sesión
             with db.begin_nested():
@@ -207,5 +211,6 @@ def sync_pull(
         sets=fetch(Set, Set.session_exercise_id.in_(se_ids)) if se_ids else [],
         profiles=fetch(Profile, Profile.user_id == user_id),
         body_metrics=fetch(BodyMetric, BodyMetric.user_id == user_id),
+        food_logs=fetch(FoodLog, FoodLog.user_id == user_id),
         pulled_at=pulled_at,
     )

@@ -3,8 +3,8 @@ import { NavLink } from 'react-router-dom'
 const tabs = [
   { to: '/', label: 'Hoy', icon: '🏋️' },
   { to: '/rutinas', label: 'Rutinas', icon: '📋' },
-  { to: '/ejercicios', label: 'Ejercicios', icon: '💪' },
   { to: '/progreso', label: 'Progreso', icon: '📈' },
+  { to: '/nutricion', label: 'Nutrición', icon: '🥗' },
   { to: '/perfil', label: 'Perfil', icon: '👤' },
 ]
 

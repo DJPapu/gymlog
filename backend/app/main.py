@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import admin, exercises, routines, sync
+from app.routers import admin, exercises, nutrition, routines, sync
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app.include_router(exercises.router)
 app.include_router(routines.router)
 app.include_router(sync.router)
 app.include_router(admin.router)
+app.include_router(nutrition.router)
 
 
 @app.get("/health")
