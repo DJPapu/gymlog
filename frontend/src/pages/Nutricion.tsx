@@ -95,26 +95,35 @@ async function estimateWithGemini(
       if (start !== -1 && end > start) {
         parsed = JSON.parse(raw.slice(start, end + 1))
       } else {
-        // Fallback: parsear texto libre (incluyendo markdown con ** y sumas "X + Y")
-        // Quitar asteriscos de markdown antes de buscar
-        const txt = raw.replace(/\*+/g, '')
+        // Fallback: parsear texto libre (markdown con **, sumas "X + Y = Z", etc.)
+        const txt = raw.replace(/\*+/g, '').replace(/_+/g, '')
 
-        // Sumar expresiones tipo "266 + 116"
-        const sumExpr = (s: string): number =>
-          s.split('+').reduce((acc, n) => acc + parseFloat(n.replace(',', '.').trim()), 0)
-
-        // Extrae primer grupo numérico (posiblemente "X + Y") tras un label
-        const extract = (re: RegExp): number | null => {
-          const m = txt.match(re)
+        const toF = (s: string) => parseFloat(s.replace(',', '.').trim())
+        // Para "X + Y + Z = Total": si hay "= N" usa el total; si no, suma los términos
+        const extractAfterLabel = (labelRe: RegExp): number | null => {
+          const m = txt.match(labelRe)
           if (!m) return null
-          return sumExpr(m[1])
+          const after = txt.slice((m.index ?? 0) + m[0].length)
+          // Buscar "= número" (el total explícito)
+          const totalM = after.match(/^[^.\n]*?=\s*~?\s*([\d.,]+)/)
+          if (totalM) return toF(totalM[1])
+          // Si no, sumar todos los números del primer bloque
+          const exprM = after.match(/^[^.\n]*?([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
+          if (!exprM) return null
+          return exprM[1]
+            .split('+')
+            .reduce((acc, n) => { const v = toF(n); return acc + (isNaN(v) ? 0 : v) }, 0)
         }
 
-        const calories = extract(/[Cc]alor[íi]?(?:ias?|es?)[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
-          ?? extract(/([\d.,]+(?:\s*\+\s*[\d.,]+)*)\s*kcal/i)
-        const protein_g = extract(/[Pp]rote[íi]n[a:]?[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
-        const carbs_g = extract(/[Cc]arb[sh]?[ao]?s?[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
-        const fat_g = extract(/(?:[Gg]ras[ao]s?|[Ff]at)[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
+        const CAL = /[Cc]alor[íi]?(?:ias?|es?)\s*(?:\([^)]*\))?\s*:/
+        const PROT = /[Pp]rote[íi]n[ao]?s?\s*:/
+        const CARB = /(?:[Cc]arb(?:oh?[iy]d[ar]a?t(?:es?|os?)?|os?|s?)|[Hh]idra?tos?)\s*(?:de [Cc]arbono)?\s*:/
+        const FAT  = /(?:[Gg]ras[ao]s?|[Ll][ií]pid[oa]s?|[Ff]at)\s*:/
+
+        const calories  = extractAfterLabel(CAL) ?? null
+        const protein_g = extractAfterLabel(PROT)
+        const carbs_g   = extractAfterLabel(CARB)
+        const fat_g     = extractAfterLabel(FAT)
 
         if (!calories) throw new Error(`No se pudo extraer calorías: ${raw.slice(0, 150)}`)
         parsed = { calories, protein_g, carbs_g, fat_g }
