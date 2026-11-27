@@ -50,27 +50,27 @@ async function estimateWithGemini(
   const hasPhotos = photos && photos.length > 0
   const weightLine = weightG ? `\nCantidad indicada: ${weightG}g` : ''
 
-  let prompt: string
-  const FORMAT =
-    'Responde SOLO con estas líneas, sin texto adicional:\n' +
-    'CALORIAS: [número]\n' +
-    'PROTEINAS: [número]\n' +
-    'CARBOHIDRATOS: [número]\n' +
-    'GRASAS: [número]'
+  // Terminar el prompt con "CALORIAS:" fuerza al modelo a continuar desde ahí
+  const buildPrompt = (body: string) =>
+    body +
+    '\n\nResponde SOLO con estas 4 líneas (sin texto adicional):\n' +
+    'CALORIAS: NNN\nPROTEINAS: NNN\nCARBOHIDRATOS: NNN\nGRASAS: NNN\n\n' +
+    'CALORIAS:'
 
+  let prompt: string
   if (hasPhotos) {
     const descHint = description.trim()
       ? `El usuario describe: "${description}"${weightLine}.`
-      : weightLine ? `Cantidad indicada: ${weightG}g.` : ''
-    prompt =
-      `Analiza las imágenes. ${descHint}\n` +
-      'Si hay etiqueta nutricional, usa esos valores (ajustando al peso indicado si aplica).\n' +
-      'Si es foto de comida, estima según las porciones visibles.\n\n' +
-      FORMAT
+      : weightLine ? `Cantidad: ${weightG}g.` : ''
+    prompt = buildPrompt(
+      `Analiza las imágenes de comida. ${descHint}\n` +
+      'Si hay etiqueta nutricional, úsala (ajusta al peso indicado si aplica).\n' +
+      'Si es foto de comida, estima según las porciones visibles.',
+    )
   } else {
-    prompt =
-      `Estima los macronutrientes totales de: "${description}"${weightLine}\n\n` +
-      FORMAT
+    prompt = buildPrompt(
+      `Alimento: "${description}"${weightLine}`,
+    )
   }
 
   const imageParts: Part[] = hasPhotos
@@ -83,11 +83,12 @@ async function estimateWithGemini(
     try {
       const model = genai.getGenerativeModel({
         model: modelName,
-        systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con las líneas solicitadas, sin texto previo ni posterior.',
-        generationConfig: { maxOutputTokens: 512 },
+        systemInstruction: 'Eres un nutricionista experto. Continúa exactamente el formato indicado.',
+        generationConfig: { maxOutputTokens: 512, temperature: 0 },
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
-      const raw = result.response.text().trim()
+      // El prompt ya empieza con "CALORIAS:" — concatenamos para que el parser encuentre la clave
+      const raw = 'CALORIAS:' + result.response.text().trim()
       console.log(`[Gemini ${modelName}]`, raw.slice(0, 300))
 
       // Buscar CLAVE: número — funciona con formato CLAVE: valor y también con JSON
