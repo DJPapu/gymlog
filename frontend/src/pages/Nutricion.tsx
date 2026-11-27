@@ -4,7 +4,10 @@ import { db, type FoodLog } from '../db/schema'
 import { computeTargets } from '../lib/tdee'
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
-const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash']
+const GEMINI_MODELS = [
+  'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash',
+  'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash',
+]
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 async function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {

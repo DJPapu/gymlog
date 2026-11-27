@@ -271,7 +271,10 @@ def ai_summary(
     )
 
     client = genai.Client(api_key=settings.gemini_api_key)
-    _MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash"]
+    _MODELS = [
+        "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash",
+        "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash",
+    ]
     last_exc: Exception | None = None
     response = None
     for model in _MODELS:
