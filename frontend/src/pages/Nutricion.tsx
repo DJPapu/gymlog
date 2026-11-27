@@ -77,15 +77,6 @@ async function estimateWithGemini(
     ? await Promise.all(photos!.map(fileToInlinePart))
     : []
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const toResult = (p: any): GeminiEstimate => ({
-    description: p.description ?? null,
-    calories: Math.round(p.calories),
-    protein_g: p.protein_g != null ? Math.round(p.protein_g * 10) / 10 : null,
-    carbs_g:   p.carbs_g   != null ? Math.round(p.carbs_g   * 10) / 10 : null,
-    fat_g:     p.fat_g     != null ? Math.round(p.fat_g     * 10) / 10 : null,
-  })
-
   let lastErr: Error | null = null
 
   for (const modelName of GEMINI_MODELS) {
@@ -97,14 +88,9 @@ async function estimateWithGemini(
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
       const raw = result.response.text().trim()
+      console.log(`[Gemini ${modelName}]`, raw.slice(0, 300))
 
-      // Intentar primero JSON (por si el modelo lo devuelve igualmente)
-      const s = raw.indexOf('{'), e = raw.lastIndexOf('}')
-      if (s !== -1 && e > s) {
-        try { return toResult(JSON.parse(raw.slice(s, e + 1))) } catch { /* continúa */ }
-      }
-
-      // Parser principal: buscar CLAVE: número (tolerante a mayúsculas/minúsculas y variantes)
+      // Buscar CLAVE: número — funciona con formato CLAVE: valor y también con JSON
       const kv = (keys: string): number | null => {
         const re = new RegExp(`(?:${keys})[^\\d]*(\\d+(?:[.,]\\d+)?)`, 'i')
         const m = raw.match(re)
