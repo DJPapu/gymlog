@@ -9,9 +9,12 @@ import {
 } from '@google/generative-ai'
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
+// Orden: primero los modelos que sí respetan responseMimeType:application/json
 const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
   'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash',
-  'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash',
 ]
 
 async function fileToInlinePart(file: File): Promise<Part> {
