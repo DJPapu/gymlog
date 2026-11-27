@@ -50,12 +50,9 @@ async function estimateWithGemini(
   const hasPhotos = photos && photos.length > 0
   const weightLine = weightG ? `\nCantidad indicada: ${weightG}g` : ''
 
-  // Terminar el prompt con "CALORIAS:" fuerza al modelo a continuar desde ahí
   const buildPrompt = (body: string) =>
-    body +
-    '\n\nResponde SOLO con estas 4 líneas (sin texto adicional):\n' +
-    'CALORIAS: NNN\nPROTEINAS: NNN\nCARBOHIDRATOS: NNN\nGRASAS: NNN\n\n' +
-    'CALORIAS:'
+    body + '\n\nDevuelve SOLO este JSON (sin texto extra, sin markdown):\n' +
+    '{"calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}'
 
   let prompt: string
   if (hasPhotos) {
@@ -63,14 +60,12 @@ async function estimateWithGemini(
       ? `El usuario describe: "${description}"${weightLine}.`
       : weightLine ? `Cantidad: ${weightG}g.` : ''
     prompt = buildPrompt(
-      `Analiza las imágenes de comida. ${descHint}\n` +
-      'Si hay etiqueta nutricional, úsala (ajusta al peso indicado si aplica).\n' +
-      'Si es foto de comida, estima según las porciones visibles.',
+      `Analiza las imágenes. ${descHint}\n` +
+      'Si hay etiqueta nutricional, úsala (ajusta al peso si aplica). ' +
+      'Si es foto de comida, estima según porciones visibles.',
     )
   } else {
-    prompt = buildPrompt(
-      `Alimento: "${description}"${weightLine}`,
-    )
+    prompt = buildPrompt(`Alimento: "${description}"${weightLine}`)
   }
 
   const imageParts: Part[] = hasPhotos
@@ -83,24 +78,37 @@ async function estimateWithGemini(
     try {
       const model = genai.getGenerativeModel({
         model: modelName,
-        systemInstruction: 'Eres un nutricionista experto. Continúa exactamente el formato indicado.',
-        generationConfig: { maxOutputTokens: 512, temperature: 0 },
+        systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con JSON puro.',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        generationConfig: { maxOutputTokens: 128, temperature: 0, responseMimeType: 'application/json' } as any,
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
-      // El prompt ya empieza con "CALORIAS:" — concatenamos para que el parser encuentre la clave
-      const raw = 'CALORIAS:' + result.response.text().trim()
+      const raw = result.response.text().trim()
       console.log(`[Gemini ${modelName}]`, raw.slice(0, 300))
 
-      // Buscar CLAVE: número — funciona con formato CLAVE: valor y también con JSON
-      const kv = (keys: string): number | null => {
-        const re = new RegExp(`(?:${keys})[^\\d]*(\\d+(?:[.,]\\d+)?)`, 'i')
-        const m = raw.match(re)
+      // Parsear JSON con nombres de campo flexibles
+      try {
+        const j = JSON.parse(raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, ''))
+        const n = (v: unknown) => (v != null ? Math.round(Number(v) * 10) / 10 : null)
+        const cal = j.calories ?? j.kcal ?? j.calories_kcal ?? j.calorias
+        if (cal != null) return {
+          description: null,
+          calories: Math.round(Number(cal)),
+          protein_g: n(j.protein_g ?? j.protein ?? j.proteins ?? j.proteinas ?? j.proteina),
+          carbs_g:   n(j.carbs_g   ?? j.carbs   ?? j.carbohydrates ?? j.carbohidratos),
+          fat_g:     n(j.fat_g     ?? j.fat     ?? j.fats           ?? j.grasas),
+        }
+      } catch { /* no es JSON — intentar kv */ }
+
+      // kv fallback: buscar "CLAVE: número" en texto libre
+      const kv = (keys: string) => {
+        const m = raw.match(new RegExp(`(?:${keys})[^\\d]*(\\d+(?:[.,]\\d+)?)`, 'i'))
         return m ? parseFloat(m[1].replace(',', '.')) : null
       }
-      const calories  = kv('CALORIAS|CALORIES|CALOR\\w*|KCAL\\w*|ENERG\\w*')
-      const protein_g = kv('PROTEINAS?|PROTEINS?|PROT\\w*')
-      const carbs_g   = kv('CARBOHIDRATOS?|CARBOHYDRATES?|CARBOS?|HIDRATOS?|CARBS?')
-      const fat_g     = kv('GRASAS?|LIPIDOS?|LIPIDS?|FAT\\w*')
+      const calories  = kv('calories|calorias|calor\\w*|kcal\\w*|energ\\w*')
+      const protein_g = kv('protein_g|proteinas?|proteins?|prot\\w*')
+      const carbs_g   = kv('carbs_g|carbohidratos?|carbohydrates?|carbos?|hidratos?|carbs?')
+      const fat_g     = kv('fat_g|grasas?|lipidos?|lipids?|fat\\w*')
 
       if (calories !== null) {
         return {
