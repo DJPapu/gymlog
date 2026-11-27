@@ -99,6 +99,32 @@ function MacroBar({
   )
 }
 
+// ── Meal templates ────────────────────────────────────────────────────────────
+
+const MEAL_TEMPLATES: {
+  label: string; desc: string; meal: Meal
+  calories: number; protein_g: number; carbs_g: number; fat_g: number
+}[] = [
+  {
+    label: 'Desayuno',
+    desc: 'Desayuno habitual',
+    meal: 'desayuno',
+    calories: 334, protein_g: 29.8, carbs_g: 9.3, fat_g: 19.2,
+  },
+  {
+    label: 'Batido Proteico',
+    desc: 'Batido proteico',
+    meal: 'snack',
+    calories: 312, protein_g: 48.7, carbs_g: 10.7, fat_g: 8,
+  },
+  {
+    label: 'Merienda',
+    desc: 'Café con leche (80ml café + 120ml leche entera) + banana',
+    meal: 'snack',
+    calories: 187, protein_g: 5, carbs_g: 33, fat_g: 4.6,
+  },
+]
+
 // ── Photo slot ────────────────────────────────────────────────────────────────
 
 function PhotoSlot({
@@ -174,6 +200,17 @@ function AddFoodForm({
   const hasPhotos = photo1 !== null || photo2 !== null
   const canEstimate = hasPhotos || desc.trim().length > 0
 
+  function applyTemplate(t: typeof MEAL_TEMPLATES[0]) {
+    setMeal(t.meal)
+    setDesc(t.desc)
+    setCals(String(t.calories))
+    setProteinG(String(t.protein_g))
+    setCarbsG(String(t.carbs_g))
+    setFatG(String(t.fat_g))
+    setWeightG('')
+    setUsedAI(false)
+  }
+
   async function estimate() {
     if (!canEstimate) return
     setEstimating(true)
@@ -238,6 +275,19 @@ function AddFoodForm({
             }`}
           >
             {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Quick templates */}
+      <div className="flex gap-1.5 flex-wrap">
+        {MEAL_TEMPLATES.map((t) => (
+          <button
+            key={t.label}
+            onClick={() => applyTemplate(t)}
+            className="text-xs px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:bg-indigo-200 transition-colors font-medium"
+          >
+            ⚡ {t.label}
           </button>
         ))}
       </div>
