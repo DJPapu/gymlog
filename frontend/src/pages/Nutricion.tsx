@@ -221,6 +221,7 @@ function AddFoodForm({
   date: string; defaultMeal: Meal; onDone: () => void
 }) {
   const [meal, setMeal] = useState<Meal>(defaultMeal)
+  const [loggedAt, setLoggedAt] = useState(date)
   const [desc, setDesc] = useState('')
   const [weightG, setWeightG] = useState('')
   const [cals, setCals] = useState('')
@@ -267,7 +268,7 @@ function AddFoodForm({
     const entry: FoodLog = {
       id: crypto.randomUUID(),
       user_id: '',
-      logged_at: date,
+      logged_at: loggedAt || date,
       meal,
       description: desc.trim(),
       weight_g: weightG ? parseFloat(weightG) : null,
@@ -302,6 +303,26 @@ function AddFoodForm({
             {m.label}
           </button>
         ))}
+      </div>
+
+      {/* Date — solo visible si difiere del día actual */}
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-gray-400 shrink-0">Fecha</label>
+        <input
+          type="date"
+          value={loggedAt}
+          max={todayISO()}
+          onChange={(e) => setLoggedAt(e.target.value || date)}
+          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:border-indigo-400"
+        />
+        {loggedAt !== todayISO() && (
+          <button
+            onClick={() => setLoggedAt(todayISO())}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Hoy
+          </button>
+        )}
       </div>
 
       {/* Photo slots */}
