@@ -1,8 +1,110 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { db, type FoodLog } from '../db/schema'
-import { apiFetch } from '../lib/api'
 import { computeTargets } from '../lib/tdee'
+
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
+const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash']
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+
+async function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      const base64 = result.split(',')[1]
+      resolve({ data: base64, mimeType: file.type || 'image/jpeg' })
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+interface GeminiEstimate {
+  description: string | null
+  calories: number
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+}
+
+async function estimateWithGemini(
+  description: string,
+  weightG?: number | null,
+  photos?: File[],
+): Promise<GeminiEstimate> {
+  if (!GEMINI_KEY) throw new Error('VITE_GEMINI_API_KEY no configurada')
+
+  const hasPhotos = photos && photos.length > 0
+  const weightLine = weightG ? `\nCantidad indicada: ${weightG}g` : ''
+
+  let prompt: string
+  if (hasPhotos) {
+    const descHint = description.trim()
+      ? `El usuario describe: "${description}"${weightLine}.`
+      : weightLine ? `Cantidad indicada: ${weightG}g.` : ''
+    prompt =
+      `Analiza las imágenes de esta comida o etiqueta nutricional. ${descHint}\n` +
+      'Si hay una etiqueta nutricional visible, usa esos valores exactos (ajustando al peso indicado si aplica).\n' +
+      'Si es una foto de comida, estima según las porciones visibles.\n\n' +
+      'Responde ÚNICAMENTE con JSON válido, sin markdown ni texto extra:\n' +
+      '{"description": "<nombre breve del alimento>", "calories": <entero>, "protein_g": <decimal>, "carbs_g": <decimal>, "fat_g": <decimal>}'
+  } else {
+    prompt =
+      `Analiza este alimento o preparación y estima sus macronutrientes:\n"${description}"${weightLine}\n\n` +
+      'Responde ÚNICAMENTE con JSON válido, sin markdown ni texto extra:\n' +
+      '{"calories": <entero>, "protein_g": <decimal>, "carbs_g": <decimal>, "fat_g": <decimal>}'
+  }
+
+  const imageParts = hasPhotos
+    ? await Promise.all(photos!.map(fileToBase64))
+    : []
+
+  const contentParts = [
+    ...imageParts.map((img) => ({ inlineData: img })),
+    { text: prompt },
+  ]
+
+  const reqBody = JSON.stringify({
+    system_instruction: {
+      parts: [{ text: 'Eres un nutricionista experto. Responde SOLO con JSON puro, sin markdown.' }],
+    },
+    contents: [{ parts: contentParts }],
+    generationConfig: { maxOutputTokens: 512 },
+  })
+
+  let lastErr: Error | null = null
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: reqBody,
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        lastErr = new Error(`Gemini ${res.status}: ${err.slice(0, 200)}`)
+        continue
+      }
+      const data = await res.json()
+      const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      const clean = text.trim().replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '')
+      const parsed = JSON.parse(clean)
+      return {
+        description: parsed.description ?? null,
+        calories: Math.round(parsed.calories),
+        protein_g: parsed.protein_g != null ? Math.round(parsed.protein_g * 10) / 10 : null,
+        carbs_g: parsed.carbs_g != null ? Math.round(parsed.carbs_g * 10) / 10 : null,
+        fat_g: parsed.fat_g != null ? Math.round(parsed.fat_g * 10) / 10 : null,
+      }
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e))
+    }
+  }
+  throw lastErr ?? new Error('Gemini no disponible')
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 type Meal = FoodLog['meal']
 
@@ -59,6 +161,58 @@ function MacroBar({
   )
 }
 
+// ── Photo slot ────────────────────────────────────────────────────────────────
+
+function PhotoSlot({
+  label, file, onCapture, onRemove,
+}: {
+  label: string; file: File | null; onCapture: (f: File) => void; onRemove: () => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  const previewUrl = file ? URL.createObjectURL(file) : null
+
+  return (
+    <div className="flex-1">
+      <input
+        ref={ref}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) onCapture(f)
+          e.target.value = ''
+        }}
+      />
+      {file && previewUrl ? (
+        <div className="relative">
+          <img
+            src={previewUrl}
+            alt={label}
+            className="w-full h-20 object-cover rounded-xl border border-gray-200"
+          />
+          <button
+            onClick={onRemove}
+            className="absolute top-1 right-1 w-5 h-5 bg-black/50 text-white rounded-full text-xs flex items-center justify-center"
+          >
+            ✕
+          </button>
+          <p className="text-center text-xs text-gray-400 mt-0.5">{label}</p>
+        </div>
+      ) : (
+        <button
+          onClick={() => ref.current?.click()}
+          className="w-full h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+        >
+          <span className="text-2xl leading-none">📷</span>
+          <span className="text-xs">{label}</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── Add food form ──────────────────────────────────────────────────────────────
 
 function AddFoodForm({
@@ -75,25 +229,30 @@ function AddFoodForm({
   const [fatG, setFatG] = useState('')
   const [estimating, setEstimating] = useState(false)
   const [estimateErr, setEstimateErr] = useState<string | null>(null)
+  const [photo1, setPhoto1] = useState<File | null>(null)
+  const [photo2, setPhoto2] = useState<File | null>(null)
+  const [usedAI, setUsedAI] = useState(false)
+
+  const hasPhotos = photo1 !== null || photo2 !== null
+  const canEstimate = hasPhotos || desc.trim().length > 0
 
   async function estimate() {
-    if (!desc.trim()) return
+    if (!canEstimate) return
     setEstimating(true)
     setEstimateErr(null)
     try {
-      const res = await apiFetch<{
-        calories: number; protein_g: number | null; carbs_g: number | null; fat_g: number | null
-      }>('/nutrition/estimate', {
-        method: 'POST',
-        body: JSON.stringify({
-          description: desc.trim(),
-          weight_g: weightG ? parseFloat(weightG) : null,
-        }),
-      })
+      const photos = [photo1, photo2].filter(Boolean) as File[]
+      const res = await estimateWithGemini(
+        desc.trim(),
+        weightG ? parseFloat(weightG) : null,
+        photos,
+      )
+      if (res.description && !desc.trim()) setDesc(res.description)
       setCals(String(res.calories))
       if (res.protein_g != null) setProteinG(String(res.protein_g))
       if (res.carbs_g != null) setCarbsG(String(res.carbs_g))
       if (res.fat_g != null) setFatG(String(res.fat_g))
+      setUsedAI(true)
     } catch (e) {
       setEstimateErr(e instanceof Error ? e.message : 'Error al estimar')
     } finally {
@@ -116,7 +275,7 @@ function AddFoodForm({
       protein_g: proteinG ? parseFloat(proteinG) : null,
       carbs_g: carbsG ? parseFloat(carbsG) : null,
       fat_g: fatG ? parseFloat(fatG) : null,
-      source: estimating ? 'manual' : (cals && !estimating ? 'gemini' : 'manual'),
+      source: usedAI ? 'gemini' : 'manual',
       notes: null,
       updated_at: now,
       deleted_at: null,
@@ -145,12 +304,28 @@ function AddFoodForm({
         ))}
       </div>
 
+      {/* Photo slots */}
+      <div className="flex gap-2">
+        <PhotoSlot
+          label="Comida"
+          file={photo1}
+          onCapture={setPhoto1}
+          onRemove={() => setPhoto1(null)}
+        />
+        <PhotoSlot
+          label="Etiqueta"
+          file={photo2}
+          onCapture={setPhoto2}
+          onRemove={() => setPhoto2(null)}
+        />
+      </div>
+
       {/* Description + weight */}
       <div className="flex gap-2">
         <input
           value={desc}
           onChange={(e) => setDesc(e.target.value)}
-          placeholder="Descripción (p.ej. 2 huevos revueltos con pan)"
+          placeholder={hasPhotos ? 'Descripción opcional…' : 'Descripción (p.ej. 2 huevos revueltos)'}
           className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-indigo-400"
         />
         <input
@@ -165,10 +340,14 @@ function AddFoodForm({
       {/* Gemini estimate button */}
       <button
         onClick={estimate}
-        disabled={estimating || !desc.trim()}
+        disabled={estimating || !canEstimate}
         className="w-full text-sm py-2 rounded-xl bg-violet-50 text-violet-700 font-medium disabled:opacity-40 hover:bg-violet-100 transition-colors"
       >
-        {estimating ? 'Estimando…' : '✨ Estimar con IA'}
+        {estimating
+          ? 'Estimando…'
+          : hasPhotos
+            ? '✨ Analizar foto con IA'
+            : '✨ Estimar con IA'}
       </button>
       {estimateErr && <p className="text-xs text-red-500">{estimateErr}</p>}
 
@@ -232,6 +411,7 @@ function FoodItem({ log }: { log: FoodLog }) {
           {Math.round(log.calories_kcal)} kcal
           {log.protein_g != null && ` · ${log.protein_g}g prot`}
           {log.weight_g != null && ` · ${log.weight_g}g`}
+          {log.source === 'gemini' && ' · ✨'}
         </p>
       </div>
       <button
@@ -274,7 +454,6 @@ export default function Nutricion() {
     { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
   )
 
-  const isToday = date === todayISO()
   const canGoForward = date < todayISO()
 
   return (
@@ -301,7 +480,6 @@ export default function Nutricion() {
         {/* Summary card */}
         {targets ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3">
-            {/* Calories headline */}
             <div className="flex items-baseline justify-between mb-2">
               <span className="text-2xl font-bold text-gray-900">{Math.round(totals.calories)}</span>
               <span className="text-sm text-gray-400">/ {targets.calories} kcal</span>
@@ -314,8 +492,6 @@ export default function Nutricion() {
                 style={{ width: `${Math.min((totals.calories / targets.calories) * 100, 100)}%` }}
               />
             </div>
-
-            {/* Macros */}
             <div className="flex gap-3">
               <MacroBar label="Proteína" value={totals.protein_g} target={targets.protein_g} unit="g" color="bg-blue-400" />
               <MacroBar label="Carbos" value={totals.carbs_g} target={targets.carbs_g} unit="g" color="bg-amber-400" />
@@ -372,9 +548,10 @@ export default function Nutricion() {
           )
         })}
 
-        {isToday && (logs ?? []).length === 0 && addingMeal === null && (
+        {(logs ?? []).length === 0 && addingMeal === null && (
           <p className="text-center text-sm text-gray-400 py-8">
-            Sin registros para hoy.<br />Pulsa «+ Añadir alimento» para empezar.
+            Sin registros para {formatDate(date).toLowerCase()}.<br />
+            Pulsa «+ Añadir alimento» para empezar.
           </p>
         )}
       </div>
