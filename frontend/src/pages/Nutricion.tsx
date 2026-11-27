@@ -3,20 +3,28 @@ import { useRef, useState } from 'react'
 import { db, type FoodLog } from '../db/schema'
 import { computeTargets } from '../lib/tdee'
 
+import {
+  GoogleGenerativeAI,
+  type Part,
+} from '@google/generative-ai'
+
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
 const GEMINI_MODELS = [
   'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash',
   'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash',
 ]
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
-async function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
+async function fileToInlinePart(file: File): Promise<Part> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string
-      const base64 = result.split(',')[1]
-      resolve({ data: base64, mimeType: file.type || 'image/jpeg' })
+      resolve({
+        inlineData: {
+          data: result.split(',')[1],
+          mimeType: file.type || 'image/jpeg',
+        },
+      })
     }
     reader.onerror = reject
     reader.readAsDataURL(file)
@@ -38,6 +46,7 @@ async function estimateWithGemini(
 ): Promise<GeminiEstimate> {
   if (!GEMINI_KEY) throw new Error('VITE_GEMINI_API_KEY no configurada')
 
+  const genai = new GoogleGenerativeAI(GEMINI_KEY)
   const hasPhotos = photos && photos.length > 0
   const weightLine = weightG ? `\nCantidad indicada: ${weightG}g` : ''
 
@@ -59,39 +68,21 @@ async function estimateWithGemini(
       '{"calories": <entero>, "protein_g": <decimal>, "carbs_g": <decimal>, "fat_g": <decimal>}'
   }
 
-  const imageParts = hasPhotos
-    ? await Promise.all(photos!.map(fileToBase64))
+  const imageParts: Part[] = hasPhotos
+    ? await Promise.all(photos!.map(fileToInlinePart))
     : []
 
-  const contentParts = [
-    ...imageParts.map((img) => ({ inlineData: img })),
-    { text: prompt },
-  ]
-
-  const reqBody = JSON.stringify({
-    system_instruction: {
-      parts: [{ text: 'Eres un nutricionista experto. Responde SOLO con JSON puro, sin markdown.' }],
-    },
-    contents: [{ parts: contentParts }],
-    generationConfig: { maxOutputTokens: 512 },
-  })
-
   let lastErr: Error | null = null
-  for (const model of GEMINI_MODELS) {
+  for (const modelName of GEMINI_MODELS) {
     try {
-      const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: reqBody,
+      const model = genai.getGenerativeModel({
+        model: modelName,
+        systemInstruction: 'Eres un nutricionista experto. Responde SOLO con JSON puro, sin markdown.',
+        generationConfig: { maxOutputTokens: 512 },
       })
-      if (!res.ok) {
-        const err = await res.text()
-        lastErr = new Error(`Gemini ${res.status}: ${err.slice(0, 200)}`)
-        continue
-      }
-      const data = await res.json()
-      const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-      const clean = text.trim().replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '')
+      const result = await model.generateContent([...imageParts, { text: prompt }])
+      const text = result.response.text().trim()
+      const clean = text.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '')
       const parsed = JSON.parse(clean)
       return {
         description: parsed.description ?? null,
@@ -101,7 +92,12 @@ async function estimateWithGemini(
         fat_g: parsed.fat_g != null ? Math.round(parsed.fat_g * 10) / 10 : null,
       }
     } catch (e) {
-      lastErr = e instanceof Error ? e : new Error(String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      lastErr = new Error(msg)
+      // Solo continuar al siguiente modelo en errores de disponibilidad
+      if (!msg.includes('503') && !msg.includes('UNAVAILABLE') && !msg.includes('404') && !msg.includes('429')) {
+        throw lastErr
+      }
     }
   }
   throw lastErr ?? new Error('Gemini no disponible')
