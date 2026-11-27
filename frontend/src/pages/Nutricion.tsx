@@ -59,13 +59,13 @@ async function estimateWithGemini(
       `Analiza las imágenes de esta comida o etiqueta nutricional. ${descHint}\n` +
       'Si hay una etiqueta nutricional visible, usa esos valores exactos (ajustando al peso indicado si aplica).\n' +
       'Si es una foto de comida, estima según las porciones visibles.\n\n' +
-      'Tu respuesta debe ser SOLO el objeto JSON, nada más. Ejemplo:\n' +
-      '{"description": "Pollo a la plancha", "calories": 165, "protein_g": 31.0, "carbs_g": 0.0, "fat_g": 3.6}'
+      'Responde completando este JSON con los valores reales (sin texto adicional, sin markdown):\n' +
+      '{"description": "...", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}'
   } else {
     prompt =
-      `Analiza este alimento o preparación y estima sus macronutrientes:\n"${description}"${weightLine}\n\n` +
-      'Tu respuesta debe ser SOLO el objeto JSON, nada más. Ejemplo:\n' +
-      '{"calories": 165, "protein_g": 31.0, "carbs_g": 0.0, "fat_g": 3.6}'
+      `Estima los macronutrientes de: "${description}"${weightLine}\n\n` +
+      'Responde completando este JSON con los valores reales (sin texto adicional, sin markdown):\n' +
+      '{"calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}'
   }
 
   const imageParts: Part[] = hasPhotos
@@ -95,22 +95,29 @@ async function estimateWithGemini(
       if (start !== -1 && end > start) {
         parsed = JSON.parse(raw.slice(start, end + 1))
       } else {
-        // Fallback: extraer valores numéricos del texto libre
-        const toNum = (m: RegExpMatchArray | null, idx = 1): number | null => {
-          const s = m?.[idx] ?? m?.[idx + 1]
-          return s != null ? parseFloat(s.replace(',', '.')) : null
+        // Fallback: parsear texto libre (incluyendo markdown con ** y sumas "X + Y")
+        // Quitar asteriscos de markdown antes de buscar
+        const txt = raw.replace(/\*+/g, '')
+
+        // Sumar expresiones tipo "266 + 116"
+        const sumExpr = (s: string): number =>
+          s.split('+').reduce((acc, n) => acc + parseFloat(n.replace(',', '.').trim()), 0)
+
+        // Extrae primer grupo numérico (posiblemente "X + Y") tras un label
+        const extract = (re: RegExp): number | null => {
+          const m = txt.match(re)
+          if (!m) return null
+          return sumExpr(m[1])
         }
-        const cal = raw.match(/(\d+(?:[.,]\d+)?)\s*kcal/i)
-        const prot = raw.match(/prote[íi]n[a:]?\s*[~:]?\s*(\d+(?:[.,]\d+)?)\s*g/i)
-        const carb = raw.match(/carb[sh]?[ao]?s?[:\s]+~?\s*(\d+(?:[.,]\d+)?)\s*g/i)
-        const fat = raw.match(/(?:gras[ao]s?|fat)[:\s]+~?\s*(\d+(?:[.,]\d+)?)\s*g/i)
-        if (!cal) throw new Error(`Sin JSON ni kcal en respuesta: ${raw.slice(0, 120)}`)
-        parsed = {
-          calories: toNum(cal),
-          protein_g: toNum(prot),
-          carbs_g: toNum(carb),
-          fat_g: toNum(fat),
-        }
+
+        const calories = extract(/[Cc]alor[íi]?(?:ias?|es?)[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
+          ?? extract(/([\d.,]+(?:\s*\+\s*[\d.,]+)*)\s*kcal/i)
+        const protein_g = extract(/[Pp]rote[íi]n[a:]?[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
+        const carbs_g = extract(/[Cc]arb[sh]?[ao]?s?[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
+        const fat_g = extract(/(?:[Gg]ras[ao]s?|[Ff]at)[:\s*]+~?\s*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
+
+        if (!calories) throw new Error(`No se pudo extraer calorías: ${raw.slice(0, 150)}`)
+        parsed = { calories, protein_g, carbs_g, fat_g }
       }
       return {
         description: parsed.description ?? null,
