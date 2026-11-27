@@ -9,14 +9,8 @@ import {
 } from '@google/generative-ai'
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
-const GEMINI_MODELS = [
-  'gemini-2.5-flash',       // listado como disponible
-  'gemini-2.5-flash-lite',
-  'gemini-3.8-flash',       // nombre correcto de Gemini 3 flash
-  'gemini-3.5-flash',       // alias/versión anterior
-  'gemini-3.6-flash',
-  'gemini-3.7-flash',
-]
+// Solo los modelos confirmados disponibles para esta API key
+const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash']
 
 async function fileToInlinePart(file: File): Promise<Part> {
   return new Promise((resolve, reject) => {
@@ -79,62 +73,72 @@ async function estimateWithGemini(
     ? await Promise.all(photos!.map(fileToInlinePart))
     : []
 
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
   let lastErr: Error | null = null
 
   for (const modelName of GEMINI_MODELS) {
-    try {
-      const model = genai.getGenerativeModel({
-        model: modelName,
-        systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con JSON puro, sin texto adicional.',
-        generationConfig: { maxOutputTokens: 128, temperature: 0 },
-      })
-      const result = await model.generateContent([...imageParts, { text: prompt }])
-      const raw = result.response.text().trim()
-      console.log(`[Gemini ${modelName}]`, raw.slice(0, 300))
-
-      // Parsear JSON con nombres de campo flexibles
+    // Reintentar hasta 2 veces en caso de 503/429 (saturación temporal)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await sleep(3000)
+      let transient = false
       try {
-        const j = JSON.parse(raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, ''))
-        const n = (v: unknown) => (v != null ? Math.round(Number(v) * 10) / 10 : null)
-        const cal = j.calories ?? j.kcal ?? j.calories_kcal ?? j.calorias
-        if (cal != null) return {
-          description: null,
-          calories: Math.round(Number(cal)),
-          protein_g: n(j.protein_g ?? j.protein ?? j.proteins ?? j.proteinas ?? j.proteina),
-          carbs_g:   n(j.carbs_g   ?? j.carbs   ?? j.carbohydrates ?? j.carbohidratos),
-          fat_g:     n(j.fat_g     ?? j.fat     ?? j.fats           ?? j.grasas),
-        }
-      } catch { /* no es JSON — intentar kv */ }
+        const model = genai.getGenerativeModel({
+          model: modelName,
+          systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con JSON puro, sin texto adicional.',
+          generationConfig: { maxOutputTokens: 128, temperature: 0 },
+        })
+        const result = await model.generateContent([...imageParts, { text: prompt }])
+        const raw = result.response.text().trim()
+        console.log(`[Gemini ${modelName}] attempt ${attempt + 1}:`, raw.slice(0, 300))
 
-      // kv fallback: buscar "CLAVE: número" en texto libre
-      const kv = (keys: string) => {
-        const m = raw.match(new RegExp(`(?:${keys})[^\\d]*(\\d+(?:[.,]\\d+)?)`, 'i'))
-        return m ? parseFloat(m[1].replace(',', '.')) : null
-      }
-      const calories  = kv('calories|calorias|calor\\w*|kcal\\w*|energ\\w*')
-      const protein_g = kv('protein_g|proteinas?|proteins?|prot\\w*')
-      const carbs_g   = kv('carbs_g|carbohidratos?|carbohydrates?|carbos?|hidratos?|carbs?')
-      const fat_g     = kv('fat_g|grasas?|lipidos?|lipids?|fat\\w*')
+        // JSON parser con nombres de campo flexibles
+        try {
+          const j = JSON.parse(raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, ''))
+          const n = (v: unknown) => (v != null ? Math.round(Number(v) * 10) / 10 : null)
+          const cal = j.calories ?? j.kcal ?? j.calories_kcal ?? j.calorias
+          if (cal != null) return {
+            description: null,
+            calories: Math.round(Number(cal)),
+            protein_g: n(j.protein_g ?? j.protein ?? j.proteins ?? j.proteinas ?? j.proteina),
+            carbs_g:   n(j.carbs_g   ?? j.carbs   ?? j.carbohydrates ?? j.carbohidratos),
+            fat_g:     n(j.fat_g     ?? j.fat     ?? j.fats           ?? j.grasas),
+          }
+        } catch { /* no es JSON — intentar kv */ }
 
-      if (calories !== null) {
-        return {
-          description: null,
-          calories: Math.round(calories),
-          protein_g: protein_g !== null ? Math.round(protein_g * 10) / 10 : null,
-          carbs_g:   carbs_g   !== null ? Math.round(carbs_g   * 10) / 10 : null,
-          fat_g:     fat_g     !== null ? Math.round(fat_g     * 10) / 10 : null,
+        // kv fallback: buscar "CLAVE: número" en texto libre
+        const kv = (keys: string) => {
+          const m = raw.match(new RegExp(`(?:${keys})[^\\d]*(\\d+(?:[.,]\\d+)?)`, 'i'))
+          return m ? parseFloat(m[1].replace(',', '.')) : null
         }
+        const calories  = kv('calories|calorias|calor\\w*|kcal\\w*|energ\\w*')
+        const protein_g = kv('protein_g|proteinas?|proteins?|prot\\w*')
+        const carbs_g   = kv('carbs_g|carbohidratos?|carbohydrates?|carbos?|hidratos?|carbs?')
+        const fat_g     = kv('fat_g|grasas?|lipidos?|lipids?|fat\\w*')
+
+        if (calories !== null) {
+          return {
+            description: null,
+            calories: Math.round(calories),
+            protein_g: protein_g !== null ? Math.round(protein_g * 10) / 10 : null,
+            carbs_g:   carbs_g   !== null ? Math.round(carbs_g   * 10) / 10 : null,
+            fat_g:     fat_g     !== null ? Math.round(fat_g     * 10) / 10 : null,
+          }
+        }
+        lastErr = new Error(`Sin datos (${modelName}): ${raw.slice(0, 80)}`)
+        break // respuesta recibida pero sin datos → no reintentar, probar siguiente modelo
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        lastErr = new Error(`${modelName}: ${msg}`)
+        if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) throw lastErr
+        transient = msg.includes('503') || msg.includes('429') || msg.includes('UNAVAILABLE')
+        if (!transient) break // 404 u otro error permanente → siguiente modelo
+        // 503/429: el bucle interno reintentará
       }
-      lastErr = new Error(`Sin datos (${modelName}): ${raw.slice(0, 80)}`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      lastErr = new Error(`${modelName}: ${msg}`)
-      if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) throw lastErr
-      // Cualquier otro error (503, 404, red): probar siguiente modelo
+      if (!transient) break
     }
   }
 
-  throw lastErr ?? new Error('Gemini no disponible')
+  throw lastErr ?? new Error('Los modelos de IA están saturados, inténtalo en unos segundos')
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
