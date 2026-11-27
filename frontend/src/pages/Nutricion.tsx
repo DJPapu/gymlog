@@ -72,78 +72,81 @@ async function estimateWithGemini(
     ? await Promise.all(photos!.map(fileToInlinePart))
     : []
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toResult = (p: any): GeminiEstimate => ({
+    description: p.description ?? null,
+    calories: Math.round(p.calories),
+    protein_g: p.protein_g != null ? Math.round(p.protein_g * 10) / 10 : null,
+    carbs_g:   p.carbs_g   != null ? Math.round(p.carbs_g   * 10) / 10 : null,
+    fat_g:     p.fat_g     != null ? Math.round(p.fat_g     * 10) / 10 : null,
+  })
+
   let lastErr: Error | null = null
+  let lastRaw: string | null = null
+
   for (const modelName of GEMINI_MODELS) {
     try {
       const model = genai.getGenerativeModel({
         model: modelName,
         systemInstruction: 'Eres un nutricionista experto. Responde SOLO con JSON puro, sin markdown, sin texto adicional.',
-        generationConfig: {
-          maxOutputTokens: 512,
-          responseMimeType: 'application/json',
-        },
+        generationConfig: { maxOutputTokens: 512, responseMimeType: 'application/json' },
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
       const raw = result.response.text().trim()
+      lastRaw = raw
 
-      // Intentar extraer JSON (desde primer { hasta último })
-      const start = raw.indexOf('{')
-      const end = raw.lastIndexOf('}')
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let parsed: any
-      if (start !== -1 && end > start) {
-        parsed = JSON.parse(raw.slice(start, end + 1))
-      } else {
-        // Fallback: parsear texto libre (markdown con **, sumas "X + Y = Z", etc.)
-        const txt = raw.replace(/\*+/g, '').replace(/_+/g, '')
-
-        const toF = (s: string) => parseFloat(s.replace(',', '.').trim())
-        // Para "X + Y + Z = Total": si hay "= N" usa el total; si no, suma los términos
-        const extractAfterLabel = (labelRe: RegExp): number | null => {
-          const m = txt.match(labelRe)
-          if (!m) return null
-          const after = txt.slice((m.index ?? 0) + m[0].length)
-          // Buscar "= número" (el total explícito)
-          const totalM = after.match(/^[^.\n]*?=\s*~?\s*([\d.,]+)/)
-          if (totalM) return toF(totalM[1])
-          // Si no, sumar todos los números del primer bloque
-          const exprM = after.match(/^[^.\n]*?([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
-          if (!exprM) return null
-          return exprM[1]
-            .split('+')
-            .reduce((acc, n) => { const v = toF(n); return acc + (isNaN(v) ? 0 : v) }, 0)
-        }
-
-        const CAL = /[Cc]alor[íi]?(?:ias?|es?)\s*(?:\([^)]*\))?\s*:/
-        const PROT = /[Pp]rote[íi]n[ao]?s?\s*:/
-        const CARB = /(?:[Cc]arb(?:oh?[iy]d[ar]a?t(?:es?|os?)?|os?|s?)|[Hh]idra?tos?)\s*(?:de [Cc]arbono)?\s*:/
-        const FAT  = /(?:[Gg]ras[ao]s?|[Ll][ií]pid[oa]s?|[Ff]at)\s*:/
-
-        const calories  = extractAfterLabel(CAL) ?? null
-        const protein_g = extractAfterLabel(PROT)
-        const carbs_g   = extractAfterLabel(CARB)
-        const fat_g     = extractAfterLabel(FAT)
-
-        if (!calories) throw new Error(`No se pudo extraer calorías: ${raw.slice(0, 150)}`)
-        parsed = { calories, protein_g, carbs_g, fat_g }
+      const s = raw.indexOf('{')
+      const e = raw.lastIndexOf('}')
+      if (s !== -1 && e > s) {
+        return toResult(JSON.parse(raw.slice(s, e + 1)))
       }
+      // Modelo respondió pero sin JSON → guardar texto y probar el siguiente
+      lastErr = new Error(`Sin JSON (${modelName})`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      lastErr = new Error(`${modelName}: ${msg}`)
+      if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) throw lastErr
+      // Cualquier otro error (503, 404, red): probar siguiente modelo
+    }
+  }
+
+  // Ningún modelo devolvió JSON — parsear la última respuesta como texto libre
+  if (lastRaw) {
+    const toF = (s: string) => parseFloat(s.replace(',', '.').trim())
+    const txt = lastRaw.replace(/[*_]/g, '')
+
+    // Busca la ÚLTIMA ocurrencia del label (más probable que sea el total)
+    // y extrae: "= N" si existe, si no suma "X + Y + Z"
+    const findLast = (re: RegExp): number | null => {
+      const g = new RegExp(re.source, re.flags + 'g')
+      let last: RegExpExecArray | null = null, m: RegExpExecArray | null
+      while ((m = g.exec(txt)) !== null) last = m
+      if (!last) return null
+      const after = txt.slice(last.index + last[0].length)
+      const tot = after.match(/^[^.\n]*?=\s*~?\s*([\d.,]+)/)
+      if (tot) return toF(tot[1])
+      const expr = after.match(/^[^.\n]*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
+      if (!expr) return null
+      return expr[1].split('+').reduce((acc, n) => { const v = toF(n); return acc + (isNaN(v) ? 0 : v) }, 0)
+    }
+
+    const CAL  = /(?:Total\s+)?Calor[íi]?(?:ias?|es?)\s*(?:\([^)]*\))?\s*:/i
+    const PROT = /(?:Total\s+)?Prote[íi]n[ao]?s?\s*:/i
+    const CARB = /(?:Total\s+)?(?:Carb(?:oh?[iy]d[ar]a?t(?:es?|os?)?|os?|s?)|Hidra?tos?)\s*(?:de Carbono)?\s*:/i
+    const FAT  = /(?:Total\s+)?(?:Gras[ao]s?|L[ií]pid[oa]s?|Fat)\s*:/i
+
+    const calories = findLast(CAL)
+    if (calories) {
       return {
-        description: parsed.description ?? null,
-        calories: Math.round(parsed.calories),
-        protein_g: parsed.protein_g != null ? Math.round(parsed.protein_g * 10) / 10 : null,
-        carbs_g: parsed.carbs_g != null ? Math.round(parsed.carbs_g * 10) / 10 : null,
-        fat_g: parsed.fat_g != null ? Math.round(parsed.fat_g * 10) / 10 : null,
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      lastErr = new Error(msg)
-      // Solo continuar al siguiente modelo en errores de disponibilidad
-      if (!msg.includes('503') && !msg.includes('UNAVAILABLE') && !msg.includes('404') && !msg.includes('429')) {
-        throw lastErr
+        description: null,
+        calories: Math.round(calories),
+        protein_g: findLast(PROT),
+        carbs_g:   findLast(CARB),
+        fat_g:     findLast(FAT),
       }
     }
   }
+
   throw lastErr ?? new Error('Gemini no disponible')
 }
 
