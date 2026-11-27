@@ -59,13 +59,13 @@ async function estimateWithGemini(
       `Analiza las imágenes de esta comida o etiqueta nutricional. ${descHint}\n` +
       'Si hay una etiqueta nutricional visible, usa esos valores exactos (ajustando al peso indicado si aplica).\n' +
       'Si es una foto de comida, estima según las porciones visibles.\n\n' +
-      'Responde ÚNICAMENTE con JSON válido, sin markdown ni texto extra:\n' +
-      '{"description": "<nombre breve del alimento>", "calories": <entero>, "protein_g": <decimal>, "carbs_g": <decimal>, "fat_g": <decimal>}'
+      'Tu respuesta debe ser SOLO el objeto JSON, nada más. Ejemplo:\n' +
+      '{"description": "Pollo a la plancha", "calories": 165, "protein_g": 31.0, "carbs_g": 0.0, "fat_g": 3.6}'
   } else {
     prompt =
       `Analiza este alimento o preparación y estima sus macronutrientes:\n"${description}"${weightLine}\n\n` +
-      'Responde ÚNICAMENTE con JSON válido, sin markdown ni texto extra:\n' +
-      '{"calories": <entero>, "protein_g": <decimal>, "carbs_g": <decimal>, "fat_g": <decimal>}'
+      'Tu respuesta debe ser SOLO el objeto JSON, nada más. Ejemplo:\n' +
+      '{"calories": 165, "protein_g": 31.0, "carbs_g": 0.0, "fat_g": 3.6}'
   }
 
   const imageParts: Part[] = hasPhotos
@@ -82,8 +82,10 @@ async function estimateWithGemini(
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
       const text = result.response.text().trim()
-      const clean = text.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '')
-      const parsed = JSON.parse(clean)
+      // Extraer el primer objeto JSON de la respuesta (aunque venga con texto extra)
+      const jsonMatch = text.match(/\{[\s\S]*?\}/)
+      if (!jsonMatch) throw new Error(`Respuesta no contiene JSON: ${text.slice(0, 100)}`)
+      const parsed = JSON.parse(jsonMatch[0])
       return {
         description: parsed.description ?? null,
         calories: Math.round(parsed.calories),
