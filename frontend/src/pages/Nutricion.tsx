@@ -77,15 +77,19 @@ async function estimateWithGemini(
     try {
       const model = genai.getGenerativeModel({
         model: modelName,
-        systemInstruction: 'Eres un nutricionista experto. Responde SOLO con JSON puro, sin markdown.',
-        generationConfig: { maxOutputTokens: 512 },
+        systemInstruction: 'Eres un nutricionista experto. Responde SOLO con JSON puro, sin markdown, sin texto adicional.',
+        generationConfig: {
+          maxOutputTokens: 512,
+          responseMimeType: 'application/json',
+        },
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
-      const text = result.response.text().trim()
-      // Extraer el primer objeto JSON de la respuesta (aunque venga con texto extra)
-      const jsonMatch = text.match(/\{[\s\S]*?\}/)
-      if (!jsonMatch) throw new Error(`Respuesta no contiene JSON: ${text.slice(0, 100)}`)
-      const parsed = JSON.parse(jsonMatch[0])
+      const raw = result.response.text().trim()
+      // Extraer desde el primer { hasta el último } como fallback si viene con texto extra
+      const start = raw.indexOf('{')
+      const end = raw.lastIndexOf('}')
+      if (start === -1 || end === -1) throw new Error(`Sin JSON en respuesta: ${raw.slice(0, 120)}`)
+      const parsed = JSON.parse(raw.slice(start, end + 1))
       return {
         description: parsed.description ?? null,
         calories: Math.round(parsed.calories),
