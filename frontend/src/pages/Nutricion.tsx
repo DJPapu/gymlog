@@ -10,8 +10,12 @@ import {
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
 const GEMINI_MODELS = [
-  'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash',
-  'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash',
+  'gemini-2.5-flash',       // listado como disponible
+  'gemini-2.5-flash-lite',
+  'gemini-3.8-flash',       // nombre correcto de Gemini 3 flash
+  'gemini-3.5-flash',       // alias/versión anterior
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
 ]
 
 async function fileToInlinePart(file: File): Promise<Part> {
@@ -50,22 +54,25 @@ async function estimateWithGemini(
   const hasPhotos = photos && photos.length > 0
   const weightLine = weightG ? `\nCantidad indicada: ${weightG}g` : ''
 
-  const buildPrompt = (body: string) =>
-    body + '\n\nDevuelve SOLO este JSON (sin texto extra, sin markdown):\n' +
-    '{"calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}'
+  // Few-shot: el modelo aprende el formato exacto por patrón, sin depender de responseMimeType
+  const EXAMPLES =
+    'Input: "Manzana 150g"\nOutput: {"calories":78,"protein_g":0.4,"carbs_g":21,"fat_g":0.2}\n' +
+    'Input: "Pollo a la plancha 200g"\nOutput: {"calories":330,"protein_g":62,"carbs_g":0,"fat_g":7}\n' +
+    'Input: "Arroz hervido 250g"\nOutput: {"calories":290,"protein_g":5,"carbs_g":63,"fat_g":0.5}\n'
 
   let prompt: string
   if (hasPhotos) {
     const descHint = description.trim()
-      ? `El usuario describe: "${description}"${weightLine}.`
+      ? `Descripción: "${description}"${weightLine}.`
       : weightLine ? `Cantidad: ${weightG}g.` : ''
-    prompt = buildPrompt(
-      `Analiza las imágenes. ${descHint}\n` +
-      'Si hay etiqueta nutricional, úsala (ajusta al peso si aplica). ' +
-      'Si es foto de comida, estima según porciones visibles.',
-    )
+    prompt =
+      `Analiza las imágenes de comida. ${descHint}\n` +
+      'Si hay etiqueta nutricional, úsala (ajustando al peso si aplica).\n' +
+      'Si es foto de comida, estima según las porciones visibles.\n' +
+      'Responde SOLO con JSON sin texto adicional:\n' +
+      'Output: {"calories":N,"protein_g":N,"carbs_g":N,"fat_g":N}\nOutput:'
   } else {
-    prompt = buildPrompt(`Alimento: "${description}"${weightLine}`)
+    prompt = EXAMPLES + `Input: "${description}"${weightLine}\nOutput:`
   }
 
   const imageParts: Part[] = hasPhotos
@@ -78,9 +85,8 @@ async function estimateWithGemini(
     try {
       const model = genai.getGenerativeModel({
         model: modelName,
-        systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con JSON puro.',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        generationConfig: { maxOutputTokens: 128, temperature: 0, responseMimeType: 'application/json' } as any,
+        systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con JSON puro, sin texto adicional.',
+        generationConfig: { maxOutputTokens: 128, temperature: 0 },
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
       const raw = result.response.text().trim()
