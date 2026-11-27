@@ -1,29 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRef, useState } from 'react'
 import { db, type FoodLog } from '../db/schema'
+import { apiFetch } from '../lib/api'
 import { computeTargets } from '../lib/tdee'
 
-import {
-  GoogleGenerativeAI,
-  type Part,
-} from '@google/generative-ai'
-
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
-// Solo los modelos confirmados disponibles para esta API key
-const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash']
-
-async function fileToInlinePart(file: File): Promise<Part> {
+function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve({
-        inlineData: {
-          data: result.split(',')[1],
-          mimeType: file.type || 'image/jpeg',
-        },
-      })
-    }
+    reader.onload = () => resolve(reader.result as string)
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
@@ -37,108 +21,25 @@ interface GeminiEstimate {
   fat_g: number | null
 }
 
-async function estimateWithGemini(
+async function estimateViaBackend(
   description: string,
   weightG?: number | null,
   photos?: File[],
 ): Promise<GeminiEstimate> {
-  if (!GEMINI_KEY) throw new Error('VITE_GEMINI_API_KEY no configurada')
-
-  const genai = new GoogleGenerativeAI(GEMINI_KEY)
-  const hasPhotos = photos && photos.length > 0
-  const weightLine = weightG ? `\nCantidad indicada: ${weightG}g` : ''
-
-  // Few-shot: el modelo aprende el formato exacto por patrón, sin depender de responseMimeType
-  const EXAMPLES =
-    'Input: "Manzana 150g"\nOutput: {"calories":78,"protein_g":0.4,"carbs_g":21,"fat_g":0.2}\n' +
-    'Input: "Pollo a la plancha 200g"\nOutput: {"calories":330,"protein_g":62,"carbs_g":0,"fat_g":7}\n' +
-    'Input: "Arroz hervido 250g"\nOutput: {"calories":290,"protein_g":5,"carbs_g":63,"fat_g":0.5}\n'
-
-  let prompt: string
-  if (hasPhotos) {
-    const descHint = description.trim()
-      ? `Descripción: "${description}"${weightLine}.`
-      : weightLine ? `Cantidad: ${weightG}g.` : ''
-    prompt =
-      `Analiza las imágenes de comida. ${descHint}\n` +
-      'Si hay etiqueta nutricional, úsala (ajustando al peso si aplica).\n' +
-      'Si es foto de comida, estima según las porciones visibles.\n' +
-      'Responde SOLO con JSON sin texto adicional:\n' +
-      'Output: {"calories":N,"protein_g":N,"carbs_g":N,"fat_g":N}\nOutput:'
-  } else {
-    prompt = EXAMPLES + `Input: "${description}"${weightLine}\nOutput:`
+  const photoUrls: string[] = []
+  for (const photo of photos ?? []) {
+    photoUrls.push(await fileToDataUrl(photo))
   }
-
-  const imageParts: Part[] = hasPhotos
-    ? await Promise.all(photos!.map(fileToInlinePart))
-    : []
-
-  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-  let lastErr: Error | null = null
-
-  for (const modelName of GEMINI_MODELS) {
-    // Reintentar hasta 2 veces en caso de 503/429 (saturación temporal)
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0) await sleep(3000)
-      let transient = false
-      try {
-        const model = genai.getGenerativeModel({
-          model: modelName,
-          systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con JSON puro, sin texto adicional.',
-          generationConfig: { maxOutputTokens: 128, temperature: 0 },
-        })
-        const result = await model.generateContent([...imageParts, { text: prompt }])
-        const raw = result.response.text().trim()
-        console.log(`[Gemini ${modelName}] attempt ${attempt + 1}:`, raw.slice(0, 300))
-
-        // JSON parser con nombres de campo flexibles
-        try {
-          const j = JSON.parse(raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, ''))
-          const n = (v: unknown) => (v != null ? Math.round(Number(v) * 10) / 10 : null)
-          const cal = j.calories ?? j.kcal ?? j.calories_kcal ?? j.calorias
-          if (cal != null) return {
-            description: null,
-            calories: Math.round(Number(cal)),
-            protein_g: n(j.protein_g ?? j.protein ?? j.proteins ?? j.proteinas ?? j.proteina),
-            carbs_g:   n(j.carbs_g   ?? j.carbs   ?? j.carbohydrates ?? j.carbohidratos),
-            fat_g:     n(j.fat_g     ?? j.fat     ?? j.fats           ?? j.grasas),
-          }
-        } catch { /* no es JSON — intentar kv */ }
-
-        // kv fallback: buscar "CLAVE: número" en texto libre
-        const kv = (keys: string) => {
-          const m = raw.match(new RegExp(`(?:${keys})[^\\d]*(\\d+(?:[.,]\\d+)?)`, 'i'))
-          return m ? parseFloat(m[1].replace(',', '.')) : null
-        }
-        const calories  = kv('calories|calorias|calor\\w*|kcal\\w*|energ\\w*')
-        const protein_g = kv('protein_g|proteinas?|proteins?|prot\\w*')
-        const carbs_g   = kv('carbs_g|carbohidratos?|carbohydrates?|carbos?|hidratos?|carbs?')
-        const fat_g     = kv('fat_g|grasas?|lipidos?|lipids?|fat\\w*')
-
-        if (calories !== null) {
-          return {
-            description: null,
-            calories: Math.round(calories),
-            protein_g: protein_g !== null ? Math.round(protein_g * 10) / 10 : null,
-            carbs_g:   carbs_g   !== null ? Math.round(carbs_g   * 10) / 10 : null,
-            fat_g:     fat_g     !== null ? Math.round(fat_g     * 10) / 10 : null,
-          }
-        }
-        lastErr = new Error(`Sin datos (${modelName}): ${raw.slice(0, 80)}`)
-        break // respuesta recibida pero sin datos → no reintentar, probar siguiente modelo
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        lastErr = new Error(`${modelName}: ${msg}`)
-        if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) throw lastErr
-        transient = msg.includes('503') || msg.includes('429') || msg.includes('UNAVAILABLE')
-        if (!transient) break // 404 u otro error permanente → siguiente modelo
-        // 503/429: el bucle interno reintentará
-      }
-      if (!transient) break
-    }
-  }
-
-  throw lastErr ?? new Error('Los modelos de IA están saturados, inténtalo en unos segundos')
+  const data = await apiFetch<{
+    calories: number
+    protein_g: number | null
+    carbs_g: number | null
+    fat_g: number | null
+  }>('/nutrition/estimate', {
+    method: 'POST',
+    body: JSON.stringify({ description, weight_g: weightG ?? null, photos: photoUrls }),
+  })
+  return { description: null, ...data }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -280,7 +181,7 @@ function AddFoodForm({
     setEstimateErr(null)
     try {
       const photos = [photo1, photo2].filter(Boolean) as File[]
-      const res = await estimateWithGemini(
+      const res = await estimateViaBackend(
         desc.trim(),
         weightG ? parseFloat(weightG) : null,
         photos,
