@@ -28,11 +28,12 @@ class EstimateResponse(BaseModel):
 
 
 _MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash-lite",   # lite tiene más capacidad disponible
+    "gemini-3.1-flash-lite",
     "gemini-3.5-flash",
     "gemini-3.6-flash",
     "gemini-3.7-flash",
+    "gemini-3.8-flash",
 ]
 
 
@@ -63,17 +64,22 @@ def estimate_calories(
     else:
         prompt = f'Estima los macronutrientes de: "{body.description}"{weight_hint}'
 
-    # Build multimodal parts: images first, then text
-    parts: list[Any] = []
-    for data_url in body.photos:
-        m = re.match(r'data:([^;]+);base64,(.+)', data_url, re.DOTALL)
-        if m:
-            mime_type, b64 = m.groups()
-            parts.append(genai_types.Part.from_bytes(
-                data=base64.b64decode(b64),
-                mime_type=mime_type,
-            ))
-    parts.append(genai_types.Part.from_text(prompt))
+    # Build multimodal contents: images first, then text
+    # When no photos, pass plain string (simpler and always supported)
+    if body.photos:
+        parts: list[Any] = []
+        for data_url in body.photos:
+            m = re.match(r'data:([^;]+);base64,(.+)', data_url, re.DOTALL)
+            if m:
+                mime_type, b64 = m.groups()
+                parts.append(genai_types.Part.from_bytes(
+                    data=base64.b64decode(b64),
+                    mime_type=mime_type,
+                ))
+        parts.append({"text": prompt})
+        contents: Any = parts
+    else:
+        contents = prompt
 
     client = genai.Client(api_key=settings.gemini_api_key)
     last_exc: Exception | None = None
@@ -85,7 +91,7 @@ def estimate_calories(
             try:
                 response = client.models.generate_content(
                     model=model,
-                    contents=parts,
+                    contents=contents,
                     config=genai_types.GenerateContentConfig(
                         system_instruction="Eres un nutricionista experto.",
                         max_output_tokens=128,
