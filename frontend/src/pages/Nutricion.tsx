@@ -85,11 +85,33 @@ async function estimateWithGemini(
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
       const raw = result.response.text().trim()
-      // Extraer desde el primer { hasta el último } como fallback si viene con texto extra
+
+      // Intentar extraer JSON (desde primer { hasta último })
       const start = raw.indexOf('{')
       const end = raw.lastIndexOf('}')
-      if (start === -1 || end === -1) throw new Error(`Sin JSON en respuesta: ${raw.slice(0, 120)}`)
-      const parsed = JSON.parse(raw.slice(start, end + 1))
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parsed: any
+      if (start !== -1 && end > start) {
+        parsed = JSON.parse(raw.slice(start, end + 1))
+      } else {
+        // Fallback: extraer valores numéricos del texto libre
+        const toNum = (m: RegExpMatchArray | null, idx = 1): number | null => {
+          const s = m?.[idx] ?? m?.[idx + 1]
+          return s != null ? parseFloat(s.replace(',', '.')) : null
+        }
+        const cal = raw.match(/(\d+(?:[.,]\d+)?)\s*kcal/i)
+        const prot = raw.match(/prote[íi]n[a:]?\s*[~:]?\s*(\d+(?:[.,]\d+)?)\s*g/i)
+        const carb = raw.match(/carb[sh]?[ao]?s?[:\s]+~?\s*(\d+(?:[.,]\d+)?)\s*g/i)
+        const fat = raw.match(/(?:gras[ao]s?|fat)[:\s]+~?\s*(\d+(?:[.,]\d+)?)\s*g/i)
+        if (!cal) throw new Error(`Sin JSON ni kcal en respuesta: ${raw.slice(0, 120)}`)
+        parsed = {
+          calories: toNum(cal),
+          protein_g: toNum(prot),
+          carbs_g: toNum(carb),
+          fat_g: toNum(fat),
+        }
+      }
       return {
         description: parsed.description ?? null,
         calories: Math.round(parsed.calories),
