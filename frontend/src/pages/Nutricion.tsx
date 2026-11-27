@@ -9,12 +9,9 @@ import {
 } from '@google/generative-ai'
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
-// Orden: primero los modelos que sí respetan responseMimeType:application/json
 const GEMINI_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-2.5-flash',
-  'gemini-1.5-flash',
   'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash',
+  'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash',
 ]
 
 async function fileToInlinePart(file: File): Promise<Part> {
@@ -54,21 +51,26 @@ async function estimateWithGemini(
   const weightLine = weightG ? `\nCantidad indicada: ${weightG}g` : ''
 
   let prompt: string
+  const FORMAT =
+    'Responde SOLO con estas líneas, sin texto adicional:\n' +
+    'CALORIAS: [número]\n' +
+    'PROTEINAS: [número]\n' +
+    'CARBOHIDRATOS: [número]\n' +
+    'GRASAS: [número]'
+
   if (hasPhotos) {
     const descHint = description.trim()
       ? `El usuario describe: "${description}"${weightLine}.`
       : weightLine ? `Cantidad indicada: ${weightG}g.` : ''
     prompt =
-      `Analiza las imágenes de esta comida o etiqueta nutricional. ${descHint}\n` +
-      'Si hay una etiqueta nutricional visible, usa esos valores exactos (ajustando al peso indicado si aplica).\n' +
-      'Si es una foto de comida, estima según las porciones visibles.\n\n' +
-      'Responde completando este JSON con los valores reales (sin texto adicional, sin markdown):\n' +
-      '{"description": "...", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}'
+      `Analiza las imágenes. ${descHint}\n` +
+      'Si hay etiqueta nutricional, usa esos valores (ajustando al peso indicado si aplica).\n' +
+      'Si es foto de comida, estima según las porciones visibles.\n\n' +
+      FORMAT
   } else {
     prompt =
-      `Estima los macronutrientes de: "${description}"${weightLine}\n\n` +
-      'Responde completando este JSON con los valores reales (sin texto adicional, sin markdown):\n' +
-      '{"calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}'
+      `Estima los macronutrientes totales de: "${description}"${weightLine}\n\n` +
+      FORMAT
   }
 
   const imageParts: Part[] = hasPhotos
@@ -85,68 +87,49 @@ async function estimateWithGemini(
   })
 
   let lastErr: Error | null = null
-  let lastRaw: string | null = null
 
   for (const modelName of GEMINI_MODELS) {
     try {
       const model = genai.getGenerativeModel({
         model: modelName,
-        systemInstruction: 'Eres un nutricionista experto. Responde SOLO con JSON puro, sin markdown, sin texto adicional.',
-        generationConfig: { maxOutputTokens: 512, responseMimeType: 'application/json' },
+        systemInstruction: 'Eres un nutricionista experto. Sigue el formato de respuesta exactamente.',
+        generationConfig: { maxOutputTokens: 256 },
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
       const raw = result.response.text().trim()
-      lastRaw = raw
 
-      const s = raw.indexOf('{')
-      const e = raw.lastIndexOf('}')
+      // Intentar primero JSON (por si el modelo lo devuelve igualmente)
+      const s = raw.indexOf('{'), e = raw.lastIndexOf('}')
       if (s !== -1 && e > s) {
-        return toResult(JSON.parse(raw.slice(s, e + 1)))
+        try { return toResult(JSON.parse(raw.slice(s, e + 1))) } catch { /* continúa */ }
       }
-      // Modelo respondió pero sin JSON → guardar texto y probar el siguiente
-      lastErr = new Error(`Sin JSON (${modelName})`)
+
+      // Parser principal: buscar CLAVE: número (tolerante a mayúsculas/minúsculas y variantes)
+      const kv = (keys: string): number | null => {
+        const re = new RegExp(`(?:${keys})[^\\d]*(\\d+(?:[.,]\\d+)?)`, 'i')
+        const m = raw.match(re)
+        return m ? parseFloat(m[1].replace(',', '.')) : null
+      }
+      const calories  = kv('CALORIAS|CALORIES|CALOR\\w*|KCAL\\w*|ENERG\\w*')
+      const protein_g = kv('PROTEINAS?|PROTEINS?|PROT\\w*')
+      const carbs_g   = kv('CARBOHIDRATOS?|CARBOHYDRATES?|CARBOS?|HIDRATOS?|CARBS?')
+      const fat_g     = kv('GRASAS?|LIPIDOS?|LIPIDS?|FAT\\w*')
+
+      if (calories !== null) {
+        return {
+          description: null,
+          calories: Math.round(calories),
+          protein_g: protein_g !== null ? Math.round(protein_g * 10) / 10 : null,
+          carbs_g:   carbs_g   !== null ? Math.round(carbs_g   * 10) / 10 : null,
+          fat_g:     fat_g     !== null ? Math.round(fat_g     * 10) / 10 : null,
+        }
+      }
+      lastErr = new Error(`Sin datos (${modelName}): ${raw.slice(0, 80)}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       lastErr = new Error(`${modelName}: ${msg}`)
       if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) throw lastErr
       // Cualquier otro error (503, 404, red): probar siguiente modelo
-    }
-  }
-
-  // Ningún modelo devolvió JSON — parsear la última respuesta como texto libre
-  if (lastRaw) {
-    const toF = (s: string) => parseFloat(s.replace(',', '.').trim())
-    const txt = lastRaw.replace(/[*_]/g, '')
-
-    // Busca la ÚLTIMA ocurrencia del label (más probable que sea el total)
-    // y extrae: "= N" si existe, si no suma "X + Y + Z"
-    const findLast = (re: RegExp): number | null => {
-      const g = new RegExp(re.source, re.flags + 'g')
-      let last: RegExpExecArray | null = null, m: RegExpExecArray | null
-      while ((m = g.exec(txt)) !== null) last = m
-      if (!last) return null
-      const after = txt.slice(last.index + last[0].length)
-      const tot = after.match(/^[^.\n]*?=\s*~?\s*([\d.,]+)/)
-      if (tot) return toF(tot[1])
-      const expr = after.match(/^[^.\n]*([\d.,]+(?:\s*\+\s*[\d.,]+)*)/)
-      if (!expr) return null
-      return expr[1].split('+').reduce((acc, n) => { const v = toF(n); return acc + (isNaN(v) ? 0 : v) }, 0)
-    }
-
-    const CAL  = /(?:Total\s+)?Calor[íi]?(?:ias?|es?)\s*(?:\([^)]*\))?\s*:/i
-    const PROT = /(?:Total\s+)?Prote[íi]n[ao]?s?\s*:/i
-    const CARB = /(?:Total\s+)?(?:Carb(?:oh?[iy]d[ar]a?t(?:es?|os?)?|os?|s?)|Hidra?tos?)\s*(?:de Carbono)?\s*:/i
-    const FAT  = /(?:Total\s+)?(?:Gras[ao]s?|L[ií]pid[oa]s?|Fat)\s*:/i
-
-    const calories = findLast(CAL)
-    if (calories) {
-      return {
-        description: null,
-        calories: Math.round(calories),
-        protein_g: findLast(PROT),
-        carbs_g:   findLast(CARB),
-        fat_g:     findLast(FAT),
-      }
     }
   }
 
