@@ -83,8 +83,8 @@ async function estimateWithGemini(
     try {
       const model = genai.getGenerativeModel({
         model: modelName,
-        systemInstruction: 'Eres un nutricionista experto. Sigue el formato de respuesta exactamente.',
-        generationConfig: { maxOutputTokens: 256 },
+        systemInstruction: 'Eres un nutricionista experto. Responde ÚNICAMENTE con las líneas solicitadas, sin texto previo ni posterior.',
+        generationConfig: { maxOutputTokens: 512 },
       })
       const result = await model.generateContent([...imageParts, { text: prompt }])
       const raw = result.response.text().trim()
