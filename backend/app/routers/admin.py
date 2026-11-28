@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,8 +10,10 @@ from app.auth import CurrentUser
 from app.config import settings
 from app.db import get_db
 from app.models import (
+    ActivityLog,
     BodyMetric,
     Exercise,
+    FoodLog,
     Profile,
     Routine,
     RoutineDay,
@@ -202,6 +204,121 @@ def _fetch_routine(db: Session, user_id: str) -> list[dict[str, Any]]:
     return result
 
 
+def _fetch_nutrition(
+    db: Session,
+    user_id: str,
+    since: datetime,
+    until: datetime | None,
+    training_dates: set[str],
+) -> dict[str, Any] | None:
+    """Daily nutrition summary + cross-reference with training days."""
+    since_date = since.date()
+    until_date = until.date() if until else None
+
+    q = (
+        select(FoodLog)
+        .where(
+            FoodLog.user_id == user_id,
+            FoodLog.logged_at >= since_date,
+            FoodLog.deleted_at.is_(None),
+        )
+        .order_by(FoodLog.logged_at)
+    )
+    if until_date:
+        q = q.where(FoodLog.logged_at < until_date)
+
+    logs = list(db.execute(q).scalars())
+    if not logs:
+        return None
+
+    daily: dict[str, dict[str, float]] = {}
+    for log in logs:
+        day = str(log.logged_at)[:10]
+        if day not in daily:
+            daily[day] = {"kcal": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+        daily[day]["kcal"] += log.calories_kcal
+        daily[day]["protein"] += log.protein_g or 0
+        daily[day]["carbs"] += log.carbs_g or 0
+        daily[day]["fat"] += log.fat_g or 0
+
+    n = len(daily)
+    avg_kcal = round(sum(d["kcal"] for d in daily.values()) / n)
+    avg_protein = round(sum(d["protein"] for d in daily.values()) / n, 1)
+    avg_carbs = round(sum(d["carbs"] for d in daily.values()) / n, 1)
+    avg_fat = round(sum(d["fat"] for d in daily.values()) / n, 1)
+
+    training_days = [d for day, d in daily.items() if day in training_dates]
+    rest_days = [d for day, d in daily.items() if day not in training_dates]
+
+    aq = (
+        select(ActivityLog)
+        .where(
+            ActivityLog.user_id == user_id,
+            ActivityLog.logged_at >= since_date,
+            ActivityLog.deleted_at.is_(None),
+        )
+    )
+    if until_date:
+        aq = aq.where(ActivityLog.logged_at < until_date)
+    extra_activities = list(db.execute(aq).scalars())
+
+    return {
+        "days_logged": n,
+        "avg_kcal": avg_kcal,
+        "avg_protein_g": avg_protein,
+        "avg_carbs_g": avg_carbs,
+        "avg_fat_g": avg_fat,
+        "training_days": {
+            "count": len(training_days),
+            "avg_kcal": round(sum(d["kcal"] for d in training_days) / len(training_days)) if training_days else None,
+            "avg_protein_g": round(sum(d["protein"] for d in training_days) / len(training_days), 1) if training_days else None,
+        },
+        "rest_days": {
+            "count": len(rest_days),
+            "avg_kcal": round(sum(d["kcal"] for d in rest_days) / len(rest_days)) if rest_days else None,
+            "avg_protein_g": round(sum(d["protein"] for d in rest_days) / len(rest_days), 1) if rest_days else None,
+        },
+        "extra_activities": [
+            {"desc": a.description, "kcal": a.calories_burned}
+            for a in extra_activities
+        ],
+    }
+
+
+def _fmt_nutrition(nutrition: dict[str, Any] | None, label: str) -> list[str]:
+    if not nutrition:
+        return [f"  Sin datos de nutrición registrados para {label}."]
+
+    lines: list[str] = []
+    lines.append(
+        f"  Días con registro: {nutrition['days_logged']} | "
+        f"Media diaria: {nutrition['avg_kcal']} kcal | "
+        f"P: {nutrition['avg_protein_g']}g | "
+        f"C: {nutrition['avg_carbs_g']}g | "
+        f"G: {nutrition['avg_fat_g']}g"
+    )
+
+    td = nutrition["training_days"]
+    rd = nutrition["rest_days"]
+    if td["count"] and td["avg_kcal"] is not None:
+        lines.append(
+            f"  Días con entrenamiento ({td['count']}): "
+            f"{td['avg_kcal']} kcal media | P: {td['avg_protein_g']}g media"
+        )
+    if rd["count"] and rd["avg_kcal"] is not None:
+        lines.append(
+            f"  Días sin entrenamiento ({rd['count']}): "
+            f"{rd['avg_kcal']} kcal media | P: {rd['avg_protein_g']}g media"
+        )
+
+    activities = nutrition.get("extra_activities", [])
+    if activities:
+        act_str = ", ".join(f"{a['desc']} ({a['kcal']} kcal)" for a in activities[:6])
+        lines.append(f"  Actividades extra registradas: {act_str}")
+
+    return lines
+
+
 @router.get("/ai-summary")
 def ai_summary(
     weeks: int = 4,
@@ -230,7 +347,15 @@ def ai_summary(
     profile = db.execute(select(Profile).where(Profile.user_id == user_id)).scalar_one_or_none()
     routine_data = _fetch_routine(db, user_id)
 
-    context = _build_context(current_sessions, prev_sessions, metrics, routine_data, profile, weeks)
+    training_dates_current = {s["date"] for s in current_sessions}
+    training_dates_prev = {s["date"] for s in prev_sessions}
+    nutrition_current = _fetch_nutrition(db, user_id, since, None, training_dates_current)
+    nutrition_prev = _fetch_nutrition(db, user_id, prev_since, since, training_dates_prev)
+
+    context = _build_context(
+        current_sessions, prev_sessions, metrics, routine_data, profile, weeks,
+        nutrition_current, nutrition_prev,
+    )
 
     if not settings.gemini_api_key:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY no configurada en las variables de entorno del servidor.")
@@ -253,20 +378,26 @@ def ai_summary(
         "El usuario ya sabe lo que hizo — NO repitas ni resumas las sesiones. "
         "Tienes dos fuentes de datos: el detalle crudo de cada sesión Y las estadísticas agregadas "
         "(duración, volumen, e1RM estimado, RPE, distribución muscular) que son exactamente lo que "
-        "muestran los gráficos de la app. Úsalas ambas para hacer un análisis más rico.\n\n"
+        "muestran los gráficos de la app. También tienes datos de nutrición diaria. "
+        "Úsalos todos para hacer un análisis integral.\n\n"
         "Ve directo al análisis:\n"
         "- Compara el período actual con el anterior: adherencia, duración media, volumen total, RPE.\n"
         "- Comenta las tendencias de e1RM por ejercicio (▲▼→ según los datos).\n"
         "- Señala qué grupos musculares recibieron más/menos volumen y si el balance es adecuado para el objetivo.\n"
         "- Compara pesos reales vs objetivos de la rutina.\n"
         "- Da recomendaciones accionables de progresión basadas en los datos.\n"
+        "- Si hay datos de nutrición: evalúa si la ingesta calórica y proteica es coherente con el objetivo "
+        "y el volumen de entrenamiento. Señala diferencias entre días de entreno y descanso si las hay. "
+        "Indica si un posible déficit o exceso puede estar afectando el rendimiento o la recuperación.\n"
         "Sé directo, motivador y conciso. No uses relleno.\n\n"
         "Proporciona el informe con estas secciones (usa ## para los títulos):\n"
         "## Tendencias y estadísticas clave\n"
         "## Progreso vs período anterior\n"
         "## Pesos vs objetivos de la rutina\n"
+        "## Nutrición y recuperación\n"
         "## Recomendaciones de progresión\n"
         "## Observaciones del entrenador\n\n"
+        "Omite la sección de nutrición solo si no hay datos de nutrición en absoluto. "
         "Responde solo con el informe, sin introducción previa."
     )
 
@@ -530,17 +661,18 @@ def _build_context(
     routine_data: list[dict[str, Any]],
     profile: Any,
     weeks: int,
+    nutrition_current: dict[str, Any] | None = None,
+    nutrition_prev: dict[str, Any] | None = None,
 ) -> str:
     lines: list[str] = []
 
     # --- User profile ---
     if profile:
         goal_map = {
-            "lose_weight": "perder peso",
+            "lose_fat": "perder grasa / definición",
             "gain_muscle": "ganar músculo / hipertrofia",
             "maintain": "mantener composición corporal",
-            "strength": "ganar fuerza",
-            "endurance": "mejorar resistencia",
+            "performance": "mejorar rendimiento",
         }
         goal_str = goal_map.get(profile.goal or "", profile.goal or "no especificado")
         lines.append(f"=== PERFIL DEL USUARIO ===")
@@ -594,5 +726,12 @@ def _build_context(
                 parts.append(f"cintura {m.waist_cm} cm")
             if parts:
                 lines.append(f"  {str(m.measured_at)[:10]}: {' | '.join(parts)}")
+
+    # --- Nutrition ---
+    lines.append(f"\n=== NUTRICIÓN — PERÍODO ACTUAL ({weeks} sem.) ===")
+    lines += _fmt_nutrition(nutrition_current, "el período actual")
+
+    lines.append(f"\n=== NUTRICIÓN — PERÍODO ANTERIOR ({weeks} sem. previas) ===")
+    lines += _fmt_nutrition(nutrition_prev, "el período anterior")
 
     return "\n".join(lines)

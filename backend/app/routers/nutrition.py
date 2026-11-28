@@ -127,3 +127,70 @@ def estimate_calories(
                 raise HTTPException(status_code=502, detail=f"Error Gemini ({model}): {e}") from e
 
     raise HTTPException(status_code=502, detail=f"Gemini no disponible: {last_exc}")
+
+
+class EstimateActivityRequest(BaseModel):
+    description: str
+    weight_kg: float = 75.0
+
+
+class EstimateActivityResponse(BaseModel):
+    calories_burned: int
+
+
+@router.post("/estimate-activity", response_model=EstimateActivityResponse)
+def estimate_activity(
+    body: EstimateActivityRequest,
+    user_id: CurrentUser = "",
+) -> Any:
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY no configurada.")
+
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=f"google-genai no instalada: {e}") from e
+
+    prompt = (
+        f'Estima las calorías quemadas en la siguiente actividad física:\n'
+        f'"{body.description}"\n'
+        f'Peso del usuario: {body.weight_kg:.0f}kg.'
+    )
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    last_exc: Exception | None = None
+
+    for model in _MODELS:
+        for attempt in range(2):
+            if attempt:
+                time.sleep(3)
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction="Eres un entrenador personal experto.",
+                        max_output_tokens=64,
+                        temperature=0,
+                        response_mime_type="application/json",
+                        response_schema={
+                            "type": "object",
+                            "properties": {"calories_burned": {"type": "integer"}},
+                            "required": ["calories_burned"],
+                        },
+                    ),
+                )
+                import json as _json
+                data = _json.loads(response.text)
+                return EstimateActivityResponse(calories_burned=int(data["calories_burned"]))
+            except Exception as e:
+                last_exc = e
+                msg = str(e)
+                if any(x in msg for x in ("503", "UNAVAILABLE", "429")):
+                    continue
+                if any(x in msg for x in ("404", "not found")):
+                    break
+                raise HTTPException(status_code=502, detail=f"Error Gemini: {e}") from e
+
+    raise HTTPException(status_code=502, detail=f"Gemini no disponible: {last_exc}")

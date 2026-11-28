@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRef, useState } from 'react'
-import { db, type FoodLog } from '../db/schema'
+import { db, type ActivityLog, type FoodLog } from '../db/schema'
 import { apiFetch } from '../lib/api'
 import { computeTargets } from '../lib/tdee'
 
@@ -40,6 +40,14 @@ async function estimateViaBackend(
     body: JSON.stringify({ description, weight_g: weightG ?? null, photos: photoUrls }),
   })
   return { description: null, ...data }
+}
+
+async function estimateActivity(description: string, weightKg: number): Promise<number> {
+  const data = await apiFetch<{ calories_burned: number }>('/nutrition/estimate-activity', {
+    method: 'POST',
+    body: JSON.stringify({ description, weight_kg: weightKg }),
+  })
+  return data.calories_burned
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -432,11 +440,225 @@ function FoodItem({ log }: { log: FoodLog }) {
   )
 }
 
+// ── Add activity form ─────────────────────────────────────────────────────────
+
+function AddActivityForm({ date, onDone }: { date: string; onDone: () => void }) {
+  const [desc, setDesc] = useState('')
+  const [cals, setCals] = useState('')
+  const [estimating, setEstimating] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const latestMetric = useLiveQuery(
+    () => db.body_metrics.orderBy('measured_at').filter((m) => !m.deleted_at && m.weight_kg != null).last(),
+    []
+  )
+  const weightKg = latestMetric?.weight_kg ?? 75
+
+  async function estimate() {
+    if (!desc.trim()) return
+    setEstimating(true)
+    setErr(null)
+    try {
+      const burned = await estimateActivity(desc.trim(), weightKg)
+      setCals(String(burned))
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Error al estimar')
+    } finally {
+      setEstimating(false)
+    }
+  }
+
+  async function save() {
+    const calories = parseInt(cals, 10)
+    if (!desc.trim() || isNaN(calories)) return
+    const now = new Date().toISOString()
+    const entry: ActivityLog = {
+      id: crypto.randomUUID(),
+      user_id: '',
+      logged_at: date,
+      description: desc.trim(),
+      duration_min: null,
+      calories_burned: calories,
+      notes: null,
+      updated_at: now,
+      deleted_at: null,
+    }
+    await db.activity_logs.put(entry)
+    await db.outbox.add({ table: 'activity_logs', record_id: entry.id, op: 'upsert', payload: entry, ts: now })
+    onDone()
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+      <p className="text-sm font-semibold text-gray-700">Añadir actividad extra</p>
+      <input
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder="Ej: Caminata 30 minutos"
+        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-indigo-400"
+      />
+      <div className="flex gap-2">
+        <input
+          value={cals}
+          onChange={(e) => setCals(e.target.value)}
+          placeholder="kcal quemadas"
+          inputMode="decimal"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-indigo-400"
+        />
+        <button
+          onClick={estimate}
+          disabled={estimating || !desc.trim()}
+          className="px-3 py-2 text-sm rounded-xl bg-violet-50 text-violet-700 font-medium disabled:opacity-40 hover:bg-violet-100 transition-colors whitespace-nowrap"
+        >
+          {estimating ? 'Estimando…' : '✨ Estimar IA'}
+        </button>
+      </div>
+      {err && <p className="text-xs text-red-500">{err}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={onDone}
+          className="flex-1 py-2 text-sm text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={save}
+          disabled={!desc.trim() || !cals}
+          className="flex-1 py-2 text-sm text-white bg-indigo-600 rounded-xl font-medium disabled:opacity-40 hover:bg-indigo-500 transition-colors"
+        >
+          Guardar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Activity log item ─────────────────────────────────────────────────────────
+
+function ActivityItem({ log }: { log: ActivityLog }) {
+  async function remove() {
+    const now = new Date().toISOString()
+    await db.activity_logs.update(log.id, { deleted_at: now, updated_at: now })
+    await db.outbox.add({
+      table: 'activity_logs', record_id: log.id, op: 'upsert',
+      payload: { ...log, deleted_at: now, updated_at: now }, ts: now,
+    })
+  }
+
+  return (
+    <div className="flex items-center justify-between py-2 group">
+      <div className="flex-1 min-w-0 mr-2">
+        <p className="text-sm text-gray-800 truncate">{log.description}</p>
+        <p className="text-xs text-gray-400">
+          {log.calories_burned} kcal quemadas
+          {log.duration_min != null && ` · ${log.duration_min} min`}
+        </p>
+      </div>
+      <button
+        onClick={remove}
+        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs px-2 py-1 transition-opacity"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+// ── Day balance card ──────────────────────────────────────────────────────────
+
+function DayBalance({ date }: { date: string }) {
+  const foodLogs = useLiveQuery(
+    () => db.food_logs.where('logged_at').equals(date).filter((l) => !l.deleted_at).toArray(),
+    [date]
+  )
+  const sessions = useLiveQuery(
+    () => db.sessions.filter((s) => !s.deleted_at && s.started_at.startsWith(date)).toArray(),
+    [date]
+  )
+  const activityLogs = useLiveQuery(
+    () => db.activity_logs.where('logged_at').equals(date).filter((l) => !l.deleted_at).toArray(),
+    [date]
+  )
+  const latestMetric = useLiveQuery(
+    () => db.body_metrics.orderBy('measured_at').filter((m) => !m.deleted_at && m.weight_kg != null).last(),
+    []
+  )
+
+  const intake = (foodLogs ?? []).reduce((s, l) => s + l.calories_kcal, 0)
+  const weightKg = latestMetric?.weight_kg ?? 75
+
+  const gymCals = (sessions ?? [])
+    .filter((s) => s.ended_at != null)
+    .reduce((s, session) => {
+      const durationHours = (new Date(session.ended_at!).getTime() - new Date(session.started_at).getTime()) / 3600000
+      return s + Math.round(5 * weightKg * durationHours)
+    }, 0)
+
+  const extraCals = (activityLogs ?? []).reduce((s, l) => s + l.calories_burned, 0)
+
+  const base = 2600
+  const totalExpenditure = base + gymCals + extraCals
+  const balance = Math.round(intake) - totalExpenditure
+
+  const intakePct = totalExpenditure > 0 ? Math.min((intake / totalExpenditure) * 100, 120) : 0
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-2">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Balance calórico</p>
+
+      <div className="flex justify-between text-sm">
+        <span className="text-gray-600">Ingesta</span>
+        <span className="font-semibold text-gray-800">{Math.round(intake)} kcal</span>
+      </div>
+
+      <div className="space-y-0.5">
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-600">Gasto</span>
+          <span className="font-semibold text-gray-800">{totalExpenditure} kcal</span>
+        </div>
+        <div className="flex justify-between text-xs text-gray-400 pl-3">
+          <span>Base</span>
+          <span>{base} kcal</span>
+        </div>
+        {gymCals > 0 && (
+          <div className="flex justify-between text-xs text-gray-400 pl-3">
+            <span>Gimnasio</span>
+            <span>{gymCals} kcal</span>
+          </div>
+        )}
+        {extraCals > 0 && (
+          <div className="flex justify-between text-xs text-gray-400 pl-3">
+            <span>Extras</span>
+            <span>{extraCals} kcal</span>
+          </div>
+        )}
+      </div>
+
+      <div className="h-px bg-gray-100" />
+
+      <div className="flex justify-between text-sm">
+        <span className="text-gray-600 font-medium">Balance</span>
+        <span className={`font-bold ${balance > 0 ? 'text-amber-500' : 'text-indigo-600'}`}>
+          {balance > 0 ? '+' : ''}{balance} kcal
+        </span>
+      </div>
+
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${balance > 0 ? 'bg-amber-400' : 'bg-indigo-400'}`}
+          style={{ width: `${intakePct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Nutricion() {
   const [date, setDate] = useState(todayISO())
   const [addingMeal, setAddingMeal] = useState<Meal | null>(null)
+  const [addingActivity, setAddingActivity] = useState(false)
 
   const profile = useLiveQuery(() => db.profiles.toCollection().first(), [])
   const latestMetric = useLiveQuery(
@@ -445,6 +667,10 @@ export default function Nutricion() {
   )
   const logs = useLiveQuery(
     () => db.food_logs.where('logged_at').equals(date).filter((l) => !l.deleted_at).toArray(),
+    [date]
+  )
+  const activityLogs = useLiveQuery(
+    () => db.activity_logs.where('logged_at').equals(date).filter((l) => !l.deleted_at).toArray(),
     [date]
   )
 
@@ -519,10 +745,13 @@ export default function Nutricion() {
 
       {/* Meal sections */}
       <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
+        {/* Balance calórico */}
+        <DayBalance date={date} />
+
         {addingMeal === null && (
           <button
             onClick={() => setAddingMeal('desayuno')}
-            className="w-full mt-2 py-3 rounded-2xl border-2 border-dashed border-gray-200 text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+            className="w-full py-3 rounded-2xl border-2 border-dashed border-gray-200 text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
           >
             + Añadir alimento
           </button>
@@ -557,11 +786,42 @@ export default function Nutricion() {
         })}
 
         {(logs ?? []).length === 0 && addingMeal === null && (
-          <p className="text-center text-sm text-gray-400 py-8">
+          <p className="text-center text-sm text-gray-400 py-4">
             Sin registros para {formatDate(date).toLowerCase()}.<br />
             Pulsa «+ Añadir alimento» para empezar.
           </p>
         )}
+
+        {/* Actividades extra */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-50">
+            <span className="text-sm font-semibold text-gray-700">Actividades extra</span>
+            <button
+              onClick={() => setAddingActivity((v) => !v)}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+            >
+              {addingActivity ? 'Cancelar' : '+ añadir'}
+            </button>
+          </div>
+
+          {addingActivity && (
+            <div className="p-4">
+              <AddActivityForm date={date} onDone={() => setAddingActivity(false)} />
+            </div>
+          )}
+
+          {(activityLogs ?? []).length > 0 ? (
+            <div className="px-4 divide-y divide-gray-50">
+              {(activityLogs ?? []).map((log) => <ActivityItem key={log.id} log={log} />)}
+            </div>
+          ) : (
+            !addingActivity && (
+              <p className="text-center text-xs text-gray-400 py-3">
+                Sin actividades registradas para hoy.
+              </p>
+            )
+          )}
+        </div>
       </div>
     </div>
   )

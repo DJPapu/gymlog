@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser
 from app.db import get_db
 from app.models import (
+    ActivityLog,
     BodyMetric,
     Exercise,
     FoodLog,
@@ -34,10 +35,11 @@ _TABLE_MAP = {
     "profiles": Profile,
     "body_metrics": BodyMetric,
     "food_logs": FoodLog,
+    "activity_logs": ActivityLog,
 }
 
 # Tablas cuyo user_id debe forzarse desde el JWT
-_USER_ID_TABLES = {"routines", "sessions", "body_metrics", "profiles", "food_logs"}
+_USER_ID_TABLES = {"routines", "sessions", "body_metrics", "profiles", "food_logs", "activity_logs"}
 
 # Orden topológico para satisfacer FKs: padres antes que hijos.
 # Sin relationship() en los modelos SQLAlchemy no puede deducirlo solo.
@@ -49,6 +51,7 @@ _TABLE_ORDER = {
     "sessions": 2,
     "body_metrics": 2,
     "food_logs": 2,
+    "activity_logs": 2,
     "routine_day_exercises": 3,
     "session_exercises": 3,
     "sets": 4,
@@ -212,5 +215,6 @@ def sync_pull(
         profiles=fetch(Profile, Profile.user_id == user_id),
         body_metrics=fetch(BodyMetric, BodyMetric.user_id == user_id),
         food_logs=fetch(FoodLog, FoodLog.user_id == user_id),
+        activity_logs=fetch(ActivityLog, ActivityLog.user_id == user_id),
         pulled_at=pulled_at,
     )

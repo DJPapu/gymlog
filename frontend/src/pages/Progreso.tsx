@@ -1,14 +1,131 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Bar, BarChart, ReferenceLine, ResponsiveContainer,
+  Bar, BarChart, ComposedChart, Line, ReferenceLine, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { DeleteButton } from '../components/DeleteButton'
 import { db, type Session, type SessionExercise, type SetRecord } from '../db/schema'
 import { useAuth } from '../lib/auth'
 import { estimateCalories } from '../lib/calories'
+
+// ── Calorie Balance Chart ────────────────────────────────────────────────────
+
+const BASE_KCAL = 2600
+const MET_STRENGTH = 5
+
+function CalorieBalanceChart() {
+  const [days, setDays] = useState(14)
+
+  const latestMetric = useLiveQuery(
+    () => db.body_metrics.orderBy('measured_at').filter((m) => !m.deleted_at && m.weight_kg != null).last(),
+    [],
+  )
+  const foodLogs = useLiveQuery(() => db.food_logs.filter((l) => !l.deleted_at).toArray(), [])
+  const gymSessions = useLiveQuery(() => db.sessions.filter((s) => !s.deleted_at && !!s.ended_at).toArray(), [])
+  const activityLogs = useLiveQuery(() => db.activity_logs.filter((l) => !l.deleted_at).toArray(), [])
+
+  const weightKg = latestMetric?.weight_kg ?? 75
+
+  const chartData = useMemo(() => {
+    const today = new Date()
+    return Array.from({ length: days }, (_, i) => {
+      const d = new Date(today)
+      d.setDate(d.getDate() - (days - 1 - i))
+      const dateStr = d.toISOString().slice(0, 10)
+
+      const intake = Math.round(
+        (foodLogs ?? []).filter((l) => l.logged_at === dateStr).reduce((s, l) => s + l.calories_kcal, 0),
+      )
+      const gymCals = (gymSessions ?? [])
+        .filter((s) => s.started_at.startsWith(dateStr) && s.ended_at)
+        .reduce((sum, s) => {
+          const durH = (new Date(s.ended_at!).getTime() - new Date(s.started_at).getTime()) / 3_600_000
+          return sum + Math.round(MET_STRENGTH * weightKg * durH)
+        }, 0)
+      const extraCals = (activityLogs ?? [])
+        .filter((l) => l.logged_at === dateStr)
+        .reduce((s, l) => s + l.calories_burned, 0)
+
+      return {
+        label: `${d.getDate()}/${d.getMonth() + 1}`,
+        intake: intake > 0 ? intake : null,
+        expenditure: BASE_KCAL + gymCals + extraCals,
+        hasGym: gymCals > 0,
+      }
+    })
+  }, [foodLogs, gymSessions, activityLogs, days, weightKg])
+
+  const hasFoodData = chartData.some((d) => d.intake != null)
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Balance calórico</p>
+        <div className="flex gap-1">
+          {([7, 14, 30] as const).map((d) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
+                days === d ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-3 text-xs text-gray-500 mb-2">
+        <span className="flex items-center gap-1">
+          <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" /> Ingesta
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-5 border-t-2 border-dashed border-indigo-400 inline-block" /> Gasto
+        </span>
+      </div>
+
+      {!hasFoodData ? (
+        <p className="text-sm text-gray-400 text-center py-6">
+          Registra tu alimentación en Nutrición para ver el balance.
+        </p>
+      ) : (
+        <div style={{ width: '100%', height: 150 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 9, fill: '#9ca3af' }}
+                tickLine={false}
+                axisLine={false}
+                interval={Math.ceil(days / 7) - 1}
+              />
+              <YAxis
+                tick={{ fontSize: 9, fill: '#9ca3af' }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => `${Math.round(v / 100) * 100}`}
+              />
+              <Tooltip
+                contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 11, padding: '4px 10px' }}
+                formatter={(value, name) => [
+                  value != null ? `${value} kcal` : '—',
+                  name === 'intake' ? 'Ingesta' : 'Gasto estimado',
+                ]}
+              />
+              <Bar dataKey="intake" fill="#fbbf24" radius={[3, 3, 0, 0]} maxBarSize={18} name="intake" />
+              <Line type="monotone" dataKey="expenditure" stroke="#6366f1" strokeWidth={1.5} dot={false} strokeDasharray="4 2" name="expenditure" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
 
 export default function Progreso() {
   const { user } = useAuth()
@@ -35,6 +152,8 @@ export default function Progreso() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+        <CalorieBalanceChart />
+
         {sessions === undefined && (
           <div className="bg-gray-100 rounded-2xl p-5 animate-pulse h-24" />
         )}

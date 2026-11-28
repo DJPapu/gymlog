@@ -87,7 +87,7 @@ export default function AdminIA() {
       <div>
         <h2 className="text-xl font-bold text-gray-900">Resumen IA</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Gemini analiza tus sesiones y mediciones corporales y genera un informe con recomendaciones.
+          Gemini analiza tus sesiones, nutrición y mediciones corporales, y genera un informe integral con recomendaciones.
         </p>
       </div>
 

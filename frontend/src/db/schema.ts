@@ -137,6 +137,18 @@ export interface FoodLog {
   deleted_at: string | null
 }
 
+export interface ActivityLog {
+  id: string
+  user_id: string
+  logged_at: string  // 'YYYY-MM-DD'
+  description: string
+  duration_min: number | null
+  calories_burned: number
+  notes: string | null
+  updated_at: string
+  deleted_at: string | null
+}
+
 export interface OutboxEntry {
   id?: number
   table: string
@@ -159,6 +171,7 @@ export class GymLogDB extends Dexie {
   profiles!: EntityTable<Profile, 'user_id'>
   body_metrics!: EntityTable<BodyMetric, 'id'>
   food_logs!: EntityTable<FoodLog, 'id'>
+  activity_logs!: EntityTable<ActivityLog, 'id'>
   outbox!: EntityTable<OutboxEntry, 'id'>
 
   constructor() {
@@ -179,6 +192,9 @@ export class GymLogDB extends Dexie {
     })
     this.version(4).stores({
       food_logs: 'id, user_id, logged_at, updated_at',
+    })
+    this.version(5).stores({
+      activity_logs: 'id, user_id, logged_at, updated_at',
     })
   }
 }
