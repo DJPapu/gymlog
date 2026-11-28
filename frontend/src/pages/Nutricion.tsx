@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { db, type ActivityLog, type FoodLog } from '../db/schema'
 import { apiFetch } from '../lib/api'
 import { computeTargets } from '../lib/tdee'
@@ -19,6 +19,7 @@ interface GeminiEstimate {
   protein_g: number | null
   carbs_g: number | null
   fat_g: number | null
+  micronutrients: Record<string, number> | null
 }
 
 async function estimateViaBackend(
@@ -35,6 +36,7 @@ async function estimateViaBackend(
     protein_g: number | null
     carbs_g: number | null
     fat_g: number | null
+    micronutrients: Record<string, number> | null
   }>('/nutrition/estimate', {
     method: 'POST',
     body: JSON.stringify({ description, weight_g: weightG ?? null, photos: photoUrls }),
@@ -133,6 +135,21 @@ const MEAL_TEMPLATES: {
   },
 ]
 
+// ── Micronutrient targets ─────────────────────────────────────────────────────
+
+type MicroKey = 'iron_mg' | 'calcium_mg' | 'magnesium_mg' | 'vitamin_d_mcg' | 'vitamin_b12_mcg' | 'zinc_mg' | 'potassium_mg' | 'vitamin_c_mg'
+
+const MICRO_TARGETS: Record<MicroKey, { label: string; unit: string; target: number; color: string }> = {
+  iron_mg:         { label: 'Hierro',   unit: 'mg',  target: 8,    color: 'bg-red-400' },
+  calcium_mg:      { label: 'Calcio',   unit: 'mg',  target: 1000, color: 'bg-sky-400' },
+  magnesium_mg:    { label: 'Magnesio', unit: 'mg',  target: 400,  color: 'bg-emerald-400' },
+  vitamin_d_mcg:   { label: 'Vit. D',  unit: 'mcg', target: 15,   color: 'bg-yellow-400' },
+  vitamin_b12_mcg: { label: 'Vit. B12',unit: 'mcg', target: 2.4,  color: 'bg-purple-400' },
+  zinc_mg:         { label: 'Zinc',     unit: 'mg',  target: 11,   color: 'bg-orange-400' },
+  potassium_mg:    { label: 'Potasio',  unit: 'mg',  target: 3500, color: 'bg-indigo-400' },
+  vitamin_c_mg:    { label: 'Vit. C',  unit: 'mg',  target: 90,   color: 'bg-pink-400' },
+}
+
 // ── Photo slot ────────────────────────────────────────────────────────────────
 
 function PhotoSlot({
@@ -204,6 +221,7 @@ function AddFoodForm({
   const [photo1, setPhoto1] = useState<File | null>(null)
   const [photo2, setPhoto2] = useState<File | null>(null)
   const [usedAI, setUsedAI] = useState(false)
+  const [micronutrients, setMicronutrients] = useState<Record<string, number> | null>(null)
 
   const hasPhotos = photo1 !== null || photo2 !== null
   const canEstimate = hasPhotos || desc.trim().length > 0
@@ -217,6 +235,7 @@ function AddFoodForm({
     setFatG(String(t.fat_g))
     setWeightG('')
     setUsedAI(false)
+    setMicronutrients(null)
   }
 
   async function estimate() {
@@ -235,6 +254,7 @@ function AddFoodForm({
       if (res.protein_g != null) setProteinG(String(res.protein_g))
       if (res.carbs_g != null) setCarbsG(String(res.carbs_g))
       if (res.fat_g != null) setFatG(String(res.fat_g))
+      if (res.micronutrients) setMicronutrients(res.micronutrients)
       setUsedAI(true)
     } catch (e) {
       setEstimateErr(e instanceof Error ? e.message : 'Error al estimar')
@@ -258,6 +278,7 @@ function AddFoodForm({
       protein_g: proteinG ? parseFloat(proteinG) : null,
       carbs_g: carbsG ? parseFloat(carbsG) : null,
       fat_g: fatG ? parseFloat(fatG) : null,
+      micronutrients: micronutrients,
       source: usedAI ? 'gemini' : 'manual',
       notes: null,
       updated_at: now,
@@ -386,6 +407,24 @@ function AddFoodForm({
           </div>
         ))}
       </div>
+
+      {/* Micronutrients estimated preview */}
+      {micronutrients && Object.keys(micronutrients).length > 0 && (
+        <div className="bg-gray-50 rounded-xl p-3">
+          <p className="text-xs text-gray-500 font-medium mb-2">Micronutrientes estimados</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {(Object.entries(MICRO_TARGETS) as [MicroKey, typeof MICRO_TARGETS[MicroKey]][]).map(([key, meta]) => {
+              const val = micronutrients[key]
+              if (!val) return null
+              return (
+                <span key={key} className="text-xs text-gray-600">
+                  {meta.label}: <span className="font-medium">{val < 1 ? val.toFixed(1) : Math.round(val)}{meta.unit}</span>
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-2">
@@ -653,6 +692,74 @@ function DayBalance({ date }: { date: string }) {
   )
 }
 
+// ── Day micronutrients card ───────────────────────────────────────────────────
+
+function DayMicronutrients({ logs }: { logs: FoodLog[] | undefined }) {
+  const [open, setOpen] = useState(false)
+
+  const totals = useMemo(() => {
+    const result: Partial<Record<MicroKey, number>> = {}
+    for (const log of logs ?? []) {
+      if (!log.micronutrients) continue
+      for (const key of Object.keys(MICRO_TARGETS) as MicroKey[]) {
+        const val = log.micronutrients[key]
+        if (val != null) result[key] = (result[key] ?? 0) + val
+      }
+    }
+    return result
+  }, [logs])
+
+  const hasAny = Object.values(totals).some((v) => v != null && v > 0)
+
+  if (!hasAny && !open) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Micronutrientes</p>
+        <span className="text-xs text-gray-400">Sin datos — estima con IA para ver</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between"
+      >
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Micronutrientes del día</p>
+        <span className="text-xs text-gray-400">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+          {(Object.entries(MICRO_TARGETS) as [MicroKey, typeof MICRO_TARGETS[MicroKey]][]).map(([key, meta]) => {
+            const val = totals[key] ?? 0
+            const pct = Math.min((val / meta.target) * 100, 100)
+            const over = val > meta.target
+            const display = val < 1 ? val.toFixed(1) : Math.round(val)
+            return (
+              <div key={key}>
+                <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+                  <span>{meta.label}</span>
+                  <span className={over ? 'text-red-500 font-semibold' : ''}>
+                    {display}<span className="text-gray-400">/{meta.target}{meta.unit}</span>
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${over ? 'bg-red-400' : meta.color}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Nutricion() {
@@ -747,6 +854,9 @@ export default function Nutricion() {
       <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
         {/* Balance calórico */}
         <DayBalance date={date} />
+
+        {/* Micronutrientes del día */}
+        <DayMicronutrients logs={logs} />
 
         {addingMeal === null && (
           <button

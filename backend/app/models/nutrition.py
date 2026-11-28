@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, Float, Integer, String, Text
+from sqlalchemy import JSON, Date, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, new_uuid
@@ -19,6 +19,7 @@ class FoodLog(Base, TimestampMixin):
     protein_g: Mapped[float | None] = mapped_column(Float(), nullable=True)
     carbs_g: Mapped[float | None] = mapped_column(Float(), nullable=True)
     fat_g: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    micronutrients: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

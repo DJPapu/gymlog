@@ -131,6 +131,7 @@ export interface FoodLog {
   protein_g: number | null
   carbs_g: number | null
   fat_g: number | null
+  micronutrients: Record<string, number> | null
   source: 'manual' | 'gemini'
   notes: string | null
   updated_at: string

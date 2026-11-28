@@ -25,6 +25,7 @@ class EstimateResponse(BaseModel):
     protein_g: float | None = None
     carbs_g: float | None = None
     fat_g: float | None = None
+    micronutrients: dict[str, float] | None = None
 
 
 _MODELS = [
@@ -94,7 +95,7 @@ def estimate_calories(
                     contents=contents,
                     config=genai_types.GenerateContentConfig(
                         system_instruction="Eres un nutricionista experto.",
-                        max_output_tokens=128,
+                        max_output_tokens=256,
                         temperature=0,
                         response_mime_type="application/json",
                         response_schema={
@@ -104,18 +105,34 @@ def estimate_calories(
                                 "protein_g": {"type": "number"},
                                 "carbs_g": {"type": "number"},
                                 "fat_g": {"type": "number"},
+                                "micronutrients": {
+                                    "type": "object",
+                                    "properties": {
+                                        "iron_mg": {"type": "number"},
+                                        "calcium_mg": {"type": "number"},
+                                        "magnesium_mg": {"type": "number"},
+                                        "vitamin_d_mcg": {"type": "number"},
+                                        "vitamin_b12_mcg": {"type": "number"},
+                                        "zinc_mg": {"type": "number"},
+                                        "potassium_mg": {"type": "number"},
+                                        "vitamin_c_mg": {"type": "number"},
+                                    },
+                                },
                             },
-                            "required": ["calories", "protein_g", "carbs_g", "fat_g"],
+                            "required": ["calories", "protein_g", "carbs_g", "fat_g", "micronutrients"],
                         },
                     ),
                 )
                 import json
                 data = json.loads(response.text)
+                raw_micro = data.get("micronutrients") or {}
+                micro = {k: round(float(v), 2) for k, v in raw_micro.items() if v is not None} or None
                 return EstimateResponse(
                     calories=round(data["calories"]),
                     protein_g=round(float(data.get("protein_g") or 0), 1) or None,
                     carbs_g=round(float(data.get("carbs_g") or 0), 1) or None,
                     fat_g=round(float(data.get("fat_g") or 0), 1) or None,
+                    micronutrients=micro,
                 )
             except Exception as e:
                 last_exc = e
