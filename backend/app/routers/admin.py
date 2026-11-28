@@ -735,3 +735,102 @@ def _build_context(
     lines += _fmt_nutrition(nutrition_prev, "el período anterior")
 
     return "\n".join(lines)
+
+
+_MICRO_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "iron_mg":         {"type": "number"},
+        "calcium_mg":      {"type": "number"},
+        "magnesium_mg":    {"type": "number"},
+        "vitamin_d_mcg":   {"type": "number"},
+        "vitamin_b12_mcg": {"type": "number"},
+        "zinc_mg":         {"type": "number"},
+        "potassium_mg":    {"type": "number"},
+        "vitamin_c_mg":    {"type": "number"},
+    },
+    "required": ["iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg",
+                 "vitamin_b12_mcg", "zinc_mg", "potassium_mg", "vitamin_c_mg"],
+}
+
+
+@router.post("/backfill-micronutrients")
+def backfill_micronutrients(
+    limit: int = 25,
+    user_id: CurrentUser = "",
+    db: DB = None,
+) -> dict[str, Any]:
+    """Estimate micronutrients for food_logs that have none, using Gemini."""
+    pending = list(
+        db.execute(
+            select(FoodLog)
+            .where(
+                FoodLog.user_id == user_id,
+                FoodLog.micronutrients.is_(None),
+                FoodLog.deleted_at.is_(None),
+            )
+            .order_by(FoodLog.updated_at.asc())
+            .limit(limit)
+        ).scalars()
+    )
+
+    # Count total remaining (before processing)
+    total_pending = db.execute(
+        select(func.count()).select_from(FoodLog).where(
+            FoodLog.user_id == user_id,
+            FoodLog.micronutrients.is_(None),
+            FoodLog.deleted_at.is_(None),
+        )
+    ).scalar_one()
+
+    if not pending:
+        return {"processed": 0, "updated": 0, "errors": 0, "remaining": 0}
+
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY no configurada.")
+
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=f"google-genai no instalada: {e}") from e
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    now = datetime.now(timezone.utc)
+    updated = 0
+    errors = 0
+
+    for log in pending:
+        weight_hint = f" ({int(log.weight_g)}g)" if log.weight_g else ""
+        prompt = f'Estima los micronutrientes de: "{log.description}"{weight_hint}'
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction="Eres un nutricionista experto.",
+                    max_output_tokens=128,
+                    temperature=0,
+                    response_mime_type="application/json",
+                    response_schema=_MICRO_SCHEMA,
+                ),
+            )
+            import json as _json
+            data = _json.loads(response.text)
+            micro = {k: round(float(v), 2) for k, v in data.items() if v is not None}
+            if micro:
+                log.micronutrients = micro
+                log.updated_at = now
+                updated += 1
+        except Exception:
+            errors += 1
+        time.sleep(0.3)
+
+    db.commit()
+
+    return {
+        "processed": len(pending),
+        "updated": updated,
+        "errors": errors,
+        "remaining": max(0, total_pending - updated),
+    }

@@ -42,6 +42,7 @@ function renderLine(line: string, i: number) {
 }
 
 type AdjustResult = { updated: { exercise: string; old_kg: number | null; new_kg: number }[]; skipped: { exercise: string; reason: string }[] }
+type BackfillResult = { processed: number; updated: number; errors: number; remaining: number }
 
 export default function AdminIA() {
   const [loading, setLoading] = useState(false)
@@ -51,6 +52,9 @@ export default function AdminIA() {
   const [adjusting, setAdjusting] = useState(false)
   const [adjustResult, setAdjustResult] = useState<AdjustResult | null>(null)
   const [adjustError, setAdjustError] = useState<string | null>(null)
+  const [backfilling, setBackfilling] = useState(false)
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null)
+  const [backfillError, setBackfillError] = useState<string | null>(null)
 
   async function adjustWeights() {
     setAdjusting(true)
@@ -63,6 +67,20 @@ export default function AdminIA() {
       setAdjustError(err instanceof Error ? err.message : 'Error')
     } finally {
       setAdjusting(false)
+    }
+  }
+
+  async function backfillMicro() {
+    setBackfilling(true)
+    setBackfillError(null)
+    setBackfillResult(null)
+    try {
+      const res = await apiFetch<BackfillResult>('/admin/backfill-micronutrients', { method: 'POST' }, 180_000)
+      setBackfillResult(res)
+    } catch (err) {
+      setBackfillError(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setBackfilling(false)
     }
   }
 
@@ -208,6 +226,42 @@ export default function AdminIA() {
                 <p className="text-xs text-gray-400">
                   ⚠️ {adjustResult.skipped.length} sin historial: {adjustResult.skipped.map(s => s.exercise).join(', ')}
                 </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Rellenar micronutrientes</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Estima con IA los micronutrientes de los alimentos sin datos. Procesa hasta 25 por vez; si quedan más, vuelve a ejecutar.
+              </p>
+            </div>
+            <button
+              onClick={backfillMicro}
+              disabled={backfilling}
+              className="shrink-0 bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+            >
+              {backfilling ? 'Procesando…' : 'Rellenar'}
+            </button>
+          </div>
+
+          {backfillError && (
+            <p className="mt-3 text-red-600 text-xs">{backfillError}</p>
+          )}
+
+          {backfillResult && (
+            <div className="mt-3 text-xs text-gray-600 space-y-0.5">
+              <p>✓ Actualizados: <span className="font-semibold text-gray-800">{backfillResult.updated}</span> de {backfillResult.processed} procesados</p>
+              {backfillResult.errors > 0 && (
+                <p className="text-amber-600">⚠ Errores: {backfillResult.errors}</p>
+              )}
+              {backfillResult.remaining > 0 ? (
+                <p className="text-indigo-600">↻ Quedan {backfillResult.remaining} pendientes — vuelve a ejecutar</p>
+              ) : (
+                <p className="text-emerald-600">✓ Todos al día</p>
               )}
             </div>
           )}
