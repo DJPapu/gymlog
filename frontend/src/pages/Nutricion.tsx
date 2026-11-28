@@ -4,12 +4,30 @@ import { db, type ActivityLog, type FoodLog } from '../db/schema'
 import { apiFetch } from '../lib/api'
 import { computeTargets } from '../lib/tdee'
 
-function fileToDataUrl(file: File): Promise<string> {
+function fileToDataUrl(file: File, maxPx = 1024): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.82))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      // fallback: send original if canvas fails (e.g. HEIC on some browsers)
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    }
+    img.src = objectUrl
   })
 }
 
@@ -40,7 +58,7 @@ async function estimateViaBackend(
   }>('/nutrition/estimate', {
     method: 'POST',
     body: JSON.stringify({ description, weight_g: weightG ?? null, photos: photoUrls }),
-  })
+  }, photoUrls.length > 0 ? 180_000 : 90_000)
   return { description: null, ...data }
 }
 

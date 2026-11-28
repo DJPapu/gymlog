@@ -85,8 +85,10 @@ def estimate_calories(
     client = genai.Client(api_key=settings.gemini_api_key)
     last_exc: Exception | None = None
 
+    # With photos the payload is large — limit to 1 attempt per model to stay within proxy timeouts
+    max_attempts = 1 if body.photos else 2
     for model in _MODELS:
-        for attempt in range(2):
+        for attempt in range(max_attempts):
             if attempt:
                 time.sleep(3)
             try:
